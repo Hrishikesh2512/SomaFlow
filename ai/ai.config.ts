@@ -1,9 +1,12 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
-export function getAgentModel(){
+export function getAgentModel() {
+  const provider = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY!,
+  });
 
-const provider = createOpenRouter({apiKey:process.env.OPENROUTER_API_KEY})
+  const modelId =
+    process.env.OPENROUTER_DEFAULT_MODEL || "openai/gpt-4o-mini";
 
-const modelId = process.env.OPENROUTER_DEFAULT_MODEL;
-
+  return provider(modelId);
 }

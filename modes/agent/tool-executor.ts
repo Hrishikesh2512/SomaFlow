@@ -157,6 +157,22 @@ export class ToolExecutor{
   }
 
 
+
+  createFolder(rel: string): string {
+    if (!this.config.tools.allowFolderCreation)
+      throw new Error("Folder creation disabled");
+    this.assertNotExcluded(rel, "create_folder");
+    const key = this.norm(rel);
+    this.tracker.log({
+      type: "folder_create",
+      path: key,
+      details: { after: key },
+      status: "pending",
+    });
+    return `Staged folder: ${key}`;
+  }  
+
+
   listFiles(rel: string, recursive: boolean): string {
     this.assertNotExcluded(rel, "list_files");
     const abs = this.resolveSafe(rel);
