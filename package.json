@@ -20,6 +20,7 @@
     "ai": "^6.0.195",
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
+    "diff": "^9.0.0",
     "figlet": "^1.11.0",
     "marked": "^18.0.4",
     "marked-terminal": "^7.3.0"
