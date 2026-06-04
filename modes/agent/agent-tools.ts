@@ -16,6 +16,26 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
       execute: async ({ path: p }) => executor.readFile(p),
     }),
 
+    read_file_lines: tool({
+      description:
+        "Read specific lines from a file. Returns numbered lines. Much cheaper than reading the whole file for large files.",
+      inputSchema: z.object({
+        path: z.string().describe("Relative file path"),
+        startLine: z.number().int().min(1).describe("First line to read (1-indexed)"),
+        endLine: z.number().int().min(1).describe("Last line to read (inclusive)"),
+      }),
+      execute: async ({ path: p, startLine, endLine }) =>
+        executor.readFileLines(p, startLine, endLine),
+    }),
+
+    summarize_file: tool({
+      description: "Get a high-level AI summary of a file's contents, exports, and purpose. Much cheaper than reading the whole file.",
+      inputSchema: z.object({
+        path: z.string().describe("Relative file path"),
+      }),
+      execute: async ({ path: p }) => executor.summarizeFile(p),
+    }),
+
     create_file: tool({
       description:
         "Stage creation of a new file (not written until the user approves).",
@@ -34,6 +54,18 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         content: z.string().describe("Complete new file contents"),
       }),
       execute: async ({ path: p, content }) => executor.modifyFile(p, content),
+    }),
+
+    replace_in_file: tool({
+      description:
+        "Stage a partial replacement in an existing file (pending approval). Target content must match exactly once.",
+      inputSchema: z.object({
+        path: z.string(),
+        targetContent: z.string().describe("Exact string to be replaced"),
+        replacementContent: z.string().describe("New content to replace with"),
+      }),
+      execute: async ({ path: p, targetContent, replacementContent }) =>
+        executor.replaceInFile(p, targetContent, replacementContent),
     }),
 
     delete_file: tool({
@@ -77,6 +109,18 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         executor.searchFiles(root, pattern, content_contains),
     }),
 
+    grep_content: tool({
+      description:
+        "Search for a text string across all files in the workspace, returning matching lines with surrounding context (like ripgrep). Use this for debugging errors or finding usages.",
+      inputSchema: z.object({
+        query: z.string().describe("The exact text to search for"),
+        root: z.string().optional().default(".").describe("Directory to search in"),
+        contextLines: z.number().int().optional().default(3).describe("Number of context lines above and below each match"),
+      }),
+      execute: async ({ query, root, contextLines }) =>
+        executor.grepContent(query, root, contextLines),
+    }),
+
     analyze_codebase: tool({
       description:
         "Summarize structure: file counts, size, extensions. Read-only.",
@@ -93,6 +137,110 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         command: z.string().describe("Single command; runs with shell: true"),
       }),
       execute: async ({ command }) => executor.queueShell(command),
+    }),
+
+    spawn_background_task: tool({
+      description: "Spawn a shell command in the background (detached). Returns a Task ID to check logs later. Useful for long-running processes (e.g. servers, huge builds).",
+      inputSchema: z.object({
+        command: z.string().describe("Command to run in background"),
+      }),
+      execute: async ({ command }) => executor.spawnBackgroundTask(command),
+    }),
+
+    check_background_task: tool({
+      description: "Read the current log output of a background task by its ID.",
+      inputSchema: z.object({
+        taskId: z.string().describe("Task ID returned from spawn_background_task"),
+      }),
+      execute: async ({ taskId }) => executor.checkBackgroundTask(taskId),
+    }),
+
+    ask_user: tool({
+      description:
+        "Pause agent execution to ask the user a clarifying question. Useful when stuck or ambiguous.",
+      inputSchema: z.object({
+        question: z.string().describe("The question to ask the user"),
+      }),
+      execute: async ({ question }) => executor.askUser(question),
+    }),
+
+    web_search: tool({
+      description: "Search the web for information (e.g., documentation, errors, general queries).",
+      inputSchema: z.object({
+        query: z.string(),
+      }),
+      execute: async ({ query }) => executor.webSearch(query),
+    }),
+
+    fetch_url: tool({
+      description: "Fetch the content of a URL (HTTP GET or POST). Use this to read documentation pages, test API endpoints, or download text content.",
+      inputSchema: z.object({
+        url: z.string().describe("The full URL to fetch"),
+        method: z.string().optional().default("GET").describe("HTTP method (GET or POST)"),
+      }),
+      execute: async ({ url, method }) => executor.fetchUrl(url, method),
+    }),
+
+    git_execute: tool({
+      description: "Execute a Git command. Use for read-only commands (status, log, diff, branch) to get immediate output, and mutating commands (commit, checkout, push) to queue for approval.",
+      inputSchema: z.object({
+        command: z.string().describe("The git command to run (e.g., 'git status', 'git commit -m \"msg\"')"),
+      }),
+      execute: async ({ command }) => {
+        if (!command.startsWith("git ")) throw new Error("Only git commands allowed.");
+        const isReadOnly = /^(git status|git log|git diff|git show|git branch)/.test(command);
+        if (isReadOnly) {
+          return executor.runImmediateShell(command);
+        } else {
+          return executor.queueShell(command);
+        }
+      },
+    }),
+
+    run_typecheck: tool({
+      description: "Run the TypeScript compiler (tsc --noEmit) to check for errors immediately. Use this to verify code before finishing.",
+      inputSchema: z.object({}),
+      execute: async () => executor.runImmediateShell("bunx tsc --noEmit"),
+    }),
+
+    run_tests: tool({
+      description: "Run the project test suite (bun test) immediately and return the results. Use this to verify code changes don't break tests.",
+      inputSchema: z.object({
+        filter: z.string().optional().describe("Optional test file or pattern to filter"),
+      }),
+      execute: async ({ filter }) => {
+        const cmd = filter ? `bun test ${filter}` : "bun test";
+        return executor.runImmediateShell(cmd);
+      },
+    }),
+
+    run_formatter: tool({
+      description: "Run a code formatter (prettier) on a specific file or directory. Executes immediately.",
+      inputSchema: z.object({
+        path: z.string().describe("File or directory to format"),
+      }),
+      execute: async ({ path: p }) =>
+        executor.runImmediateShell(`bunx prettier --write "${p}"`),
+    }),
+
+    install_dependency: tool({
+      description: "Queue installation of an npm/bun package (pending user approval). Example: 'zod', 'chalk@5'.",
+      inputSchema: z.object({
+        packageName: z.string().describe("Package name, optionally with version (e.g. 'zod', 'chalk@5')"),
+        dev: z.boolean().optional().default(false).describe("Install as devDependency"),
+      }),
+      execute: async ({ packageName, dev }) => {
+        const flag = dev ? " --dev" : "";
+        return executor.queueShell(`bun add ${packageName}${flag}`);
+      },
+    }),
+
+    search_symbol: tool({
+      description: "Search the codebase for the definition of a specific symbol (class, function, variable, interface).",
+      inputSchema: z.object({
+        symbolName: z.string(),
+      }),
+      execute: async ({ symbolName }) => executor.searchSymbol(symbolName),
     }),
 
     list_skills: tool({

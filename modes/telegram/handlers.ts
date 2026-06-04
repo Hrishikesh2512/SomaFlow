@@ -6,6 +6,9 @@ import { runAgent, runAsk, runPlanSteps } from "./agent-run";
 import { generatePlan } from "../plan/planner";
 import { planKeyboard, planMessage, planSessions, refreshPlanUi, type PlanSession } from "./plan-session";
 import { approvalDiff, approvalSessions } from "./approval-session";
+import { MemoryStore } from "../../memory/store";
+
+const memory = new MemoryStore();
 
 export function registerHandlers(bot: Telegraf) {
   bot.command("start", async (ctx) => {
@@ -48,7 +51,7 @@ export function registerHandlers(bot: Telegraf) {
     await ctx.reply("🧭 Generating a plan…");
 
     void (async ()=>{
-        const plan = await generatePlan(goal)
+        const plan = await generatePlan(goal, memory)
         const session:PlanSession = {plan , selected:new Set(plan.steps.map((s)=>s.id))}
         await ctx.reply(planMessage(session) , {parse_mode:"Markdown", ...planKeyboard(session)});
          planSessions.set(ctx.chat.id, session);

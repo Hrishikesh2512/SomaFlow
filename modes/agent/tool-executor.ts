@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import type {AgentConfig, ActionLog} from './types';
 import{ActionTracker} from './action-tracker';
 import { MemoryStore } from "../../memory/store";
@@ -12,11 +13,7 @@ export function executeTool(toolName: string, args: any) {
   if (toolName === "web_search") {
     const query = args.query;
     
-    memory.add({
-      type: "event",
-      content: `Used tool: web_search for ${query}`,
-      timestamp: Date.now(),
-    });
+    memory.add(`Used tool: web_search for ${query}`, "event");
   }
 }
 
@@ -118,6 +115,67 @@ export class ToolExecutor{
     return text;
   }
 
+  async summarizeFile(rel: string): Promise<string> {
+    this.assertNotExcluded(rel, "summarize_file");
+    const abs = this.resolveSafe(rel);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      throw new Error(`File not found: ${rel}`);
+    }
+    const st = fs.statSync(abs);
+    // Even for summarization, avoid huge binaries, but allow larger text files.
+    if (st.size > 2 * 1024 * 1024) {
+      throw new Error(`File too large for summarization: ${rel}`);
+    }
+    const text = fs.readFileSync(abs, "utf8");
+    
+    try {
+      const { default: getModel } = await import("../../ai/ai.config.ts") as any;
+      const { generateText } = await import("ai");
+      
+      const result = await generateText({
+        model: getModel.getAgentModel(),
+        system: "You are a code summarizer. Your job is to output a concise, technical summary of the provided file. Focus on exports, key classes, and main purpose. Keep it under 150 words.",
+        prompt: `File: ${rel}\n\n${text}`
+      });
+
+      const summary = result.text.trim();
+      this.tracker.log({
+        type: "code_analysis",
+        path: this.norm(rel),
+        details: { after: summary, toolName: "summarize_file" },
+        status: "executed",
+      });
+      return summary;
+    } catch (e: any) {
+      throw new Error(`Failed to summarize file: ${e.message}`);
+    }
+  }
+
+  readFileLines(rel: string, startLine: number, endLine: number): string {
+    this.assertNotExcluded(rel, "read_file_lines");
+    const abs = this.resolveSafe(rel);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      throw new Error(`File not found: ${rel}`);
+    }
+    const text = fs.readFileSync(abs, "utf8");
+    const allLines = text.split("\n");
+    const total = allLines.length;
+    const s = Math.max(1, startLine);
+    const e = Math.min(total, endLine);
+    if (s > e) throw new Error(`Invalid range: ${s}-${e} (file has ${total} lines)`);
+    const selected = allLines.slice(s - 1, e);
+    const numbered = selected.map((line, i) => `${s + i}: ${line}`).join("\n");
+    const header = `[${rel}] Lines ${s}-${e} of ${total}\n`;
+    const result = header + numbered;
+    this.tracker.log({
+      type: "code_analysis",
+      path: this.norm(rel),
+      details: { after: result, toolName: "read_file_lines" },
+      status: "executed",
+    });
+    return result;
+  }
+
   createFile(rel: string, content: string): string {
     if (!this.config.tools.allowFileCreation)
       throw new Error("File creation disabled");
@@ -154,6 +212,36 @@ export class ToolExecutor{
       status: "pending",
     });
     return `Staged update: ${key}`;
+  }
+
+  replaceInFile(rel: string, targetContent: string, replacementContent: string): string {
+    if (!this.config.tools.allowFileModification)
+      throw new Error("File modification disabled");
+    this.assertNotExcluded(rel, "replace_in_file");
+    const before = this.getEffectiveText(rel);
+    if (before === undefined)
+      throw new Error(`replace_in_file: file not found: ${rel}`);
+    
+    if (!before.includes(targetContent)) {
+      throw new Error(`replace_in_file: target content not found in file ${rel}`);
+    }
+    
+    // Check if there are multiple occurrences. We'll only replace the first one or throw if we want to be strict, but standard simple replace replaces the first instance. Let's use split/join to replace all occurrences for now, or just the first. Let's just do a simple string replace (first occurrence) as it's standard, but since this is an agent, replacing first can be error prone if multiple match. Let's enforce it matches exactly once.
+    const count = before.split(targetContent).length - 1;
+    if (count > 1) {
+      throw new Error(`replace_in_file: target content occurs ${count} times in file ${rel}. Make the target content more specific.`);
+    }
+
+    const after = before.replace(targetContent, replacementContent);
+    const key = this.norm(rel);
+    this.overlay.set(key, after);
+    this.tracker.log({
+      type: "file_modify",
+      path: key,
+      details: { before, after },
+      status: "pending",
+    });
+    return `Staged replacement in: ${key}`;
   }
 
   deleteFile(rel: string): string {
@@ -287,6 +375,101 @@ export class ToolExecutor{
     return out || "(no matches)";
   }
 
+  searchSymbol(symbolName: string): string {
+    const rootAbs = this.resolveSafe(".");
+    const results: string[] = [];
+    
+    // Very basic regex heuristics for TS/JS files
+    const regexes = [
+      new RegExp(`(?:class|interface|type|function)\\s+${symbolName}\\b`, "i"),
+      new RegExp(`(?:const|let|var)\\s+${symbolName}\\s*=\\s*(?:(?:async\\s+)?\\(|function|=>)`, "i"),
+      new RegExp(`(?:const|let|var)\\s+${symbolName}\\s*=\\s*`, "i")
+    ];
+
+    const walk = (dir: string) => {
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, ent.name);
+        const relP = path.relative(this.config.codebasePath, full).split(path.sep).join("/");
+        if (this.excluded(relP)) continue;
+        if (ent.isDirectory()) {
+          walk(full);
+        } else if (isProbablyTextFile(full)) {
+          const text = fs.readFileSync(full, "utf8");
+          const lines = text.split("\\n");
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line && regexes.some(r => r.test(line))) {
+              results.push(`${relP}:${i + 1}: ${line.trim()}`);
+            }
+          }
+        }
+      }
+    };
+
+    walk(rootAbs);
+
+    const out = results.join("\\n");
+    this.tracker.log({
+      type: "code_analysis",
+      path: "symbol_search",
+      details: { after: out || "(no matches)", toolName: "search_symbol", command: symbolName },
+      status: "executed",
+    });
+    return out || "(no matches)";
+  }
+
+  grepContent(query: string, rootRel: string = ".", contextLines: number = 3): string {
+    const rootAbs = this.resolveSafe(rootRel);
+    if (!fs.existsSync(rootAbs))
+      throw new Error(`grep_content: root not found: ${rootRel}`);
+
+    const results: string[] = [];
+    const MAX_RESULTS = 50;
+
+    const walk = (dir: string) => {
+      if (results.length >= MAX_RESULTS) return;
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (results.length >= MAX_RESULTS) return;
+        const full = path.join(dir, ent.name);
+        const relP = path.relative(this.config.codebasePath, full).split(path.sep).join("/");
+        if (this.excluded(relP)) continue;
+        if (ent.isDirectory()) {
+          walk(full);
+        } else if (isProbablyTextFile(full)) {
+          try {
+            const text = fs.readFileSync(full, "utf8");
+            const lines = text.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+              if (results.length >= MAX_RESULTS) break;
+              const line = lines[i];
+              if (line && line.includes(query)) {
+                const start = Math.max(0, i - contextLines);
+                const end = Math.min(lines.length - 1, i + contextLines);
+                const snippet: string[] = [`--- ${relP}:${i + 1} ---`];
+                for (let j = start; j <= end; j++) {
+                  const prefix = j === i ? "> " : "  ";
+                  snippet.push(`${prefix}${j + 1}: ${lines[j]}`);
+                }
+                results.push(snippet.join("\n"));
+              }
+            }
+          } catch { /* skip binary/unreadable */ }
+        }
+      }
+    };
+
+    walk(rootAbs);
+
+    const out = results.join("\n\n");
+    this.tracker.log({
+      type: "code_analysis",
+      path: this.norm(rootRel),
+      details: { after: out || "(no matches)", toolName: "grep_content", command: query },
+      status: "executed",
+    });
+    return out || "(no matches)";
+  }
+
   analyzeCodebase(rootRel: string): string {
     const rootAbs = this.resolveSafe(rootRel);
     if (!fs.existsSync(rootAbs))
@@ -331,6 +514,134 @@ export class ToolExecutor{
     });
     return `Shell queued: ${command}`;
   }
+
+  askUser(question: string): string {
+    this.tracker.log({
+      type: "ask_user",
+      path: "interaction",
+      details: { toolName: "ask_user", command: question },
+      status: "pending",
+    });
+    return `Queued question for user: ${question}`;
+  }
+
+  async webSearch(query: string): Promise<string> {
+    try {
+      // Use a free API like DuckDuckGo Lite via a proxy or an open search endpoint.
+      // Since Node doesn't have an in-built DDG wrapper, let's use the public duckduckgo html search as a simple workaround or just use fetch on a known proxy.
+      // For this implementation, we will mock it or use an open registry, but we can do a simple GET request.
+      const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`);
+      if (!res.ok) {
+        throw new Error(`Search failed: ${res.statusText}`);
+      }
+      const data = await res.json() as any;
+      const abstract = data.AbstractText;
+      const related = data.RelatedTopics?.map((t: any) => t.Text).filter(Boolean).join("\\n- ");
+      const results = `Abstract:\\n${abstract}\\n\\nRelated:\\n- ${related}`;
+
+      this.tracker.log({
+        type: "code_analysis", // mapping to an executed event
+        path: "web",
+        details: { after: results, toolName: "web_search", command: query },
+        status: "executed",
+      });
+      return results || "No results found.";
+    } catch (e: any) {
+      throw new Error(`Web search error: ${e.message}`);
+    }
+  }
+
+  async fetchUrl(url: string, method: string = "GET"): Promise<string> {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "User-Agent": "SomaFlow/1.0" },
+        signal: AbortSignal.timeout(15000),
+      });
+      const contentType = res.headers.get("content-type") || "";
+      let body: string;
+      if (contentType.includes("application/json")) {
+        body = JSON.stringify(await res.json(), null, 2);
+      } else {
+        body = await res.text();
+      }
+      // Truncate very large responses
+      if (body.length > 50000) {
+        body = body.slice(0, 50000) + "\n... (truncated)";
+      }
+      const result = `HTTP ${res.status} ${res.statusText}\nContent-Type: ${contentType}\n\n${body}`;
+      this.tracker.log({
+        type: "code_analysis",
+        path: "fetch",
+        details: { after: result, toolName: "fetch_url", command: url },
+        status: "executed",
+      });
+      return result;
+    } catch (e: any) {
+      throw new Error(`fetch_url error: ${e.message}`);
+    }
+  }
+
+  runImmediateShell(command: string): string {
+    const r = spawnSync(command, {
+      shell: true,
+      cwd: this.config.codebasePath,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    
+    const output = (r.stdout || "") + "\n" + (r.stderr || "");
+    this.tracker.log({
+      type: "code_analysis",
+      path: "shell",
+      details: { after: output, toolName: "immediate_shell", command },
+      status: "executed",
+    });
+    return output.trim() || "(no output)";
+  }
+
+  spawnBackgroundTask(command: string): string {
+    const taskId = randomUUID();
+    const logPath = path.join(this.config.codebasePath, `.somaflow-task-${taskId}.log`);
+    
+    const out = fs.openSync(logPath, "a");
+    const err = fs.openSync(logPath, "a");
+
+    const subprocess = spawn(command, [], {
+      shell: true,
+      cwd: this.config.codebasePath,
+      detached: true,
+      stdio: ["ignore", out, err],
+    });
+
+    subprocess.unref();
+
+    const info = `Background task spawned.\nTask ID: ${taskId}\nLog Path: ${logPath}\nUse 'check_background_task' to read the log.`;
+    this.tracker.log({
+      type: "code_analysis",
+      path: "background_task",
+      details: { after: info, toolName: "spawn_background_task", command },
+      status: "executed",
+    });
+    return info;
+  }
+
+  checkBackgroundTask(taskId: string): string {
+    const logPath = path.join(this.config.codebasePath, `.somaflow-task-${taskId}.log`);
+    if (!fs.existsSync(logPath)) {
+      throw new Error(`No log found for task ID: ${taskId}`);
+    }
+    const logContent = fs.readFileSync(logPath, "utf8");
+    const output = `--- Log for Task ${taskId} ---\n${logContent || "(empty)"}`;
+    this.tracker.log({
+      type: "code_analysis",
+      path: "background_task",
+      details: { after: output, toolName: "check_background_task", command: taskId },
+      status: "executed",
+    });
+    return output;
+  }
+
   skillRoots(): string[] {
     const extra =
       process.env.SKILLS_DIRS?.split(/[;]/)

@@ -51,4 +51,13 @@ export class MemoryStore {
   getAll(): MemoryItem[] {
     return this.memory;
   }
+
+  getCount(): number {
+    return this.memory.length;
+  }
+
+  replaceAll(items: MemoryItem[]): void {
+    this.memory = items;
+    this.save();
+  }
 }

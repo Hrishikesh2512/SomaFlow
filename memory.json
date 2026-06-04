@@ -46,5 +46,17 @@
     "type": "event",
     "content": "User question: and what is the capital of brazil",
     "timestamp": 1780572057439
+  },
+  {
+    "id": "44d21e1a-7f75-48d5-b698-9e67d32d3a6d",
+    "type": "event",
+    "content": "User task: hello",
+    "timestamp": 1780572661482
+  },
+  {
+    "id": "531b5c53-19d9-47d6-9936-64ca0d87db77",
+    "type": "event",
+    "content": "User task: Make a to do list program using html and css",
+    "timestamp": 1780574338975
   }
 ]
