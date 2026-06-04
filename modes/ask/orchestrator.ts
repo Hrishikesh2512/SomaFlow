@@ -9,9 +9,12 @@ import { defaultAgentConfig } from "../agent/types.ts";
 import { renderTerminalMarkdown } from "../../tui/terminal-md.ts";
 import { runApprovalFlow } from "../agent/approval.ts";
 import { createWebTools } from "../plan/web-tools.ts";
+import { MemoryStore } from "../../memory/store.ts";
+import { createMemoryTools } from "../../memory/tools.ts";
 
-function createAskTools(executor: ToolExecutor) {
+function createAskTools(executor: ToolExecutor, memory: MemoryStore) {
   return {
+    ...createMemoryTools(memory),
     read_file: tool({
       description:
         "Read a text file from the workspace. Use a path relative to the project root.",
@@ -91,16 +94,21 @@ export async function runAskMode() {
   const tracker = new ActionTracker();
   const executor = new ToolExecutor(tracker, config);
 
+  const memory = new MemoryStore();
 
   const tools = {
-    ...createAskTools(executor),
+    ...createAskTools(executor, memory),
     ...createWebTools(tracker)
   };
+
+  const mems = memory.getAll();
+  memory.add(`User question: ${question.trim()}`, "event");
 
   const agent = new ToolLoopAgent({
     model: getAgentModel(),
     stopWhen: stepCountIs(20),
     tools,
+    instructions: mems.length > 0 ? `Previous memory:\n${JSON.stringify(mems)}` : "",
   });
 
   const result = await agent.generate({ prompt: question.trim() });

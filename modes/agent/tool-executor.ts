@@ -4,6 +4,25 @@ import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
 import type {AgentConfig, ActionLog} from './types';
 import{ActionTracker} from './action-tracker';
+import { MemoryStore } from "../../memory/store";
+
+const memory = new MemoryStore();
+
+export function executeTool(toolName: string, args: any) {
+  if (toolName === "web_search") {
+    const query = args.query;
+    
+    memory.add({
+      type: "event",
+      content: `Used tool: web_search for ${query}`,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+
+
+
 
 const TEXT_EXT = new Set([
   ".ts",
