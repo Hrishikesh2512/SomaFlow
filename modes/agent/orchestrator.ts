@@ -87,5 +87,73 @@ export async function runAgentMode(){
         console.log(chalk.green('\n✓ Applied.\n'));
     }
 
+    // -- AUTO-CORRECTION LOOP --
+    const MAX_RETRIES = 2;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        console.log(chalk.cyan(`\n[Auto-Check] Running typecheck (attempt ${attempt + 1}/${MAX_RETRIES})...`));
+        const tscOutput = executor.runImmediateShell("bunx tsc --noEmit");
+
+        if (!tscOutput.includes("error TS")) {
+            console.log(chalk.green("  ✓ Typecheck passed — no errors.\n"));
+            break;
+        }
+
+        console.log(chalk.yellow(`  ⚠ Typecheck found errors. Auto-correcting...\n`));
+
+        const fixTracker = new ActionTracker();
+        const fixExecutor = new ToolExecutor(fixTracker, config);
+        const fixTools = createAgentTools(fixExecutor, memory);
+
+        const fixAgent = new ToolLoopAgent({
+            model: getAgentModel(),
+            stopWhen: stepCountIs(20),
+            instructions: [
+                "You are SomaFlow Auto-Fix Agent.",
+                "The previous code changes introduced TypeScript errors.",
+                "Fix ONLY the errors shown below. Do not change unrelated code.",
+                `Workspace root: ${config.codebasePath}`,
+                "All mutations are staged until approval.",
+            ].join("\n"),
+            tools: fixTools,
+        });
+
+        const fixResult = await fixAgent.generate({
+            prompt: `Fix these TypeScript errors:\n\n${tscOutput}`,
+            onStepFinish: ({ toolCalls }) => {
+                for (const tc of toolCalls) {
+                    const preview = JSON.stringify(tc.input).slice(0, 160);
+                    console.log(
+                        chalk.magenta("  🔧"),
+                        chalk.bold(String(tc.toolName)),
+                        chalk.dim(preview + (preview.length >= 160 ? "..." : ""))
+                    );
+                }
+            },
+        });
+
+        if (fixResult.text?.trim()) console.log(renderTerminalMarkdown(fixResult.text));
+
+        const fixPending = fixTracker.getPendingMutations();
+        if (fixPending.length === 0) {
+            console.log(chalk.dim("  No fixes proposed. Stopping auto-correction.\n"));
+            break;
+        }
+
+        const fixOk = await runApprovalFlow(fixTracker);
+        if (!fixOk) {
+            fixExecutor.clearStaging();
+            break;
+        }
+
+        const fixApply = fixExecutor.applyApprovedFromTracker();
+        if (fixApply.errors.length) {
+            console.log(chalk.red("  Auto-fix apply errors:"));
+            for (const e of fixApply.errors) console.log(chalk.red(`    • ${e}`));
+        } else {
+            console.log(chalk.green("  ✓ Auto-fix applied.\n"));
+        }
+        fixExecutor.clearStaging();
+    }
+
     executor.clearStaging();
 }

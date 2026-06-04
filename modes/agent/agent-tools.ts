@@ -16,6 +16,18 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
       execute: async ({ path: p }) => executor.readFile(p),
     }),
 
+    read_file_lines: tool({
+      description:
+        "Read specific lines from a file. Returns numbered lines. Much cheaper than reading the whole file for large files.",
+      inputSchema: z.object({
+        path: z.string().describe("Relative file path"),
+        startLine: z.number().int().min(1).describe("First line to read (1-indexed)"),
+        endLine: z.number().int().min(1).describe("Last line to read (inclusive)"),
+      }),
+      execute: async ({ path: p, startLine, endLine }) =>
+        executor.readFileLines(p, startLine, endLine),
+    }),
+
     create_file: tool({
       description:
         "Stage creation of a new file (not written until the user approves).",
@@ -89,6 +101,18 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         executor.searchFiles(root, pattern, content_contains),
     }),
 
+    grep_content: tool({
+      description:
+        "Search for a text string across all files in the workspace, returning matching lines with surrounding context (like ripgrep). Use this for debugging errors or finding usages.",
+      inputSchema: z.object({
+        query: z.string().describe("The exact text to search for"),
+        root: z.string().optional().default(".").describe("Directory to search in"),
+        contextLines: z.number().int().optional().default(3).describe("Number of context lines above and below each match"),
+      }),
+      execute: async ({ query, root, contextLines }) =>
+        executor.grepContent(query, root, contextLines),
+    }),
+
     analyze_codebase: tool({
       description:
         "Summarize structure: file counts, size, extensions. Read-only.",
@@ -124,6 +148,15 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
       execute: async ({ query }) => executor.webSearch(query),
     }),
 
+    fetch_url: tool({
+      description: "Fetch the content of a URL (HTTP GET or POST). Use this to read documentation pages, test API endpoints, or download text content.",
+      inputSchema: z.object({
+        url: z.string().describe("The full URL to fetch"),
+        method: z.string().optional().default("GET").describe("HTTP method (GET or POST)"),
+      }),
+      execute: async ({ url, method }) => executor.fetchUrl(url, method),
+    }),
+
     git_execute: tool({
       description: "Execute a Git command. Use for read-only commands (status, log, diff, branch) to get immediate output, and mutating commands (commit, checkout, push) to queue for approval.",
       inputSchema: z.object({
@@ -143,7 +176,39 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
     run_typecheck: tool({
       description: "Run the TypeScript compiler (tsc --noEmit) to check for errors immediately. Use this to verify code before finishing.",
       inputSchema: z.object({}),
-      execute: async () => executor.runImmediateShell("npx tsc --noEmit"),
+      execute: async () => executor.runImmediateShell("bunx tsc --noEmit"),
+    }),
+
+    run_tests: tool({
+      description: "Run the project test suite (bun test) immediately and return the results. Use this to verify code changes don't break tests.",
+      inputSchema: z.object({
+        filter: z.string().optional().describe("Optional test file or pattern to filter"),
+      }),
+      execute: async ({ filter }) => {
+        const cmd = filter ? `bun test ${filter}` : "bun test";
+        return executor.runImmediateShell(cmd);
+      },
+    }),
+
+    run_formatter: tool({
+      description: "Run a code formatter (prettier) on a specific file or directory. Executes immediately.",
+      inputSchema: z.object({
+        path: z.string().describe("File or directory to format"),
+      }),
+      execute: async ({ path: p }) =>
+        executor.runImmediateShell(`bunx prettier --write "${p}"`),
+    }),
+
+    install_dependency: tool({
+      description: "Queue installation of an npm/bun package (pending user approval). Example: 'zod', 'chalk@5'.",
+      inputSchema: z.object({
+        packageName: z.string().describe("Package name, optionally with version (e.g. 'zod', 'chalk@5')"),
+        dev: z.boolean().optional().default(false).describe("Install as devDependency"),
+      }),
+      execute: async ({ packageName, dev }) => {
+        const flag = dev ? " --dev" : "";
+        return executor.queueShell(`bun add ${packageName}${flag}`);
+      },
     }),
 
     search_symbol: tool({

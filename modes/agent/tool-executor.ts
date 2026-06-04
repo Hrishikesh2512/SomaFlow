@@ -114,6 +114,31 @@ export class ToolExecutor{
     return text;
   }
 
+  readFileLines(rel: string, startLine: number, endLine: number): string {
+    this.assertNotExcluded(rel, "read_file_lines");
+    const abs = this.resolveSafe(rel);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      throw new Error(`File not found: ${rel}`);
+    }
+    const text = fs.readFileSync(abs, "utf8");
+    const allLines = text.split("\n");
+    const total = allLines.length;
+    const s = Math.max(1, startLine);
+    const e = Math.min(total, endLine);
+    if (s > e) throw new Error(`Invalid range: ${s}-${e} (file has ${total} lines)`);
+    const selected = allLines.slice(s - 1, e);
+    const numbered = selected.map((line, i) => `${s + i}: ${line}`).join("\n");
+    const header = `[${rel}] Lines ${s}-${e} of ${total}\n`;
+    const result = header + numbered;
+    this.tracker.log({
+      type: "code_analysis",
+      path: this.norm(rel),
+      details: { after: result, toolName: "read_file_lines" },
+      status: "executed",
+    });
+    return result;
+  }
+
   createFile(rel: string, content: string): string {
     if (!this.config.tools.allowFileCreation)
       throw new Error("File creation disabled");
@@ -356,6 +381,58 @@ export class ToolExecutor{
     return out || "(no matches)";
   }
 
+  grepContent(query: string, rootRel: string = ".", contextLines: number = 3): string {
+    const rootAbs = this.resolveSafe(rootRel);
+    if (!fs.existsSync(rootAbs))
+      throw new Error(`grep_content: root not found: ${rootRel}`);
+
+    const results: string[] = [];
+    const MAX_RESULTS = 50;
+
+    const walk = (dir: string) => {
+      if (results.length >= MAX_RESULTS) return;
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (results.length >= MAX_RESULTS) return;
+        const full = path.join(dir, ent.name);
+        const relP = path.relative(this.config.codebasePath, full).split(path.sep).join("/");
+        if (this.excluded(relP)) continue;
+        if (ent.isDirectory()) {
+          walk(full);
+        } else if (isProbablyTextFile(full)) {
+          try {
+            const text = fs.readFileSync(full, "utf8");
+            const lines = text.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+              if (results.length >= MAX_RESULTS) break;
+              const line = lines[i];
+              if (line && line.includes(query)) {
+                const start = Math.max(0, i - contextLines);
+                const end = Math.min(lines.length - 1, i + contextLines);
+                const snippet: string[] = [`--- ${relP}:${i + 1} ---`];
+                for (let j = start; j <= end; j++) {
+                  const prefix = j === i ? "> " : "  ";
+                  snippet.push(`${prefix}${j + 1}: ${lines[j]}`);
+                }
+                results.push(snippet.join("\n"));
+              }
+            }
+          } catch { /* skip binary/unreadable */ }
+        }
+      }
+    };
+
+    walk(rootAbs);
+
+    const out = results.join("\n\n");
+    this.tracker.log({
+      type: "code_analysis",
+      path: this.norm(rootRel),
+      details: { after: out || "(no matches)", toolName: "grep_content", command: query },
+      status: "executed",
+    });
+    return out || "(no matches)";
+  }
+
   analyzeCodebase(rootRel: string): string {
     const rootAbs = this.resolveSafe(rootRel);
     if (!fs.existsSync(rootAbs))
@@ -434,6 +511,37 @@ export class ToolExecutor{
       return results || "No results found.";
     } catch (e: any) {
       throw new Error(`Web search error: ${e.message}`);
+    }
+  }
+
+  async fetchUrl(url: string, method: string = "GET"): Promise<string> {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "User-Agent": "SomaFlow/1.0" },
+        signal: AbortSignal.timeout(15000),
+      });
+      const contentType = res.headers.get("content-type") || "";
+      let body: string;
+      if (contentType.includes("application/json")) {
+        body = JSON.stringify(await res.json(), null, 2);
+      } else {
+        body = await res.text();
+      }
+      // Truncate very large responses
+      if (body.length > 50000) {
+        body = body.slice(0, 50000) + "\n... (truncated)";
+      }
+      const result = `HTTP ${res.status} ${res.statusText}\nContent-Type: ${contentType}\n\n${body}`;
+      this.tracker.log({
+        type: "code_analysis",
+        path: "fetch",
+        details: { after: result, toolName: "fetch_url", command: url },
+        status: "executed",
+      });
+      return result;
+    } catch (e: any) {
+      throw new Error(`fetch_url error: ${e.message}`);
     }
   }
 
