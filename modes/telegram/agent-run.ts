@@ -9,6 +9,8 @@ import { createWebTools } from "../plan/web-tools.ts";
 import type { Plan, PlanStep } from "../plan/types.ts";
 import { replyMd } from "./text.ts";
 import { finishOrApprove } from "./approval-session.ts";
+import { MemoryStore } from "../../memory/store.ts";
+import { createMemoryTools } from "../../memory/tools.ts";
 
 function readOnlyConfig(): AgentConfig {
   const c = defaultAgentConfig();
@@ -19,16 +21,19 @@ function readOnlyConfig(): AgentConfig {
   return c;
 }
 
-function agentOptions(config: AgentConfig, maxSteps: number) {
+function agentOptions(config: AgentConfig, maxSteps: number, memory: MemoryStore) {
+  const mems = memory.getAll();
+  const memStr = mems.length > 0 ? `\nPrevious memory:\n${JSON.stringify(mems)}` : "";
   return {
     model: getAgentModel(),
     stopWhen: stepCountIs(maxSteps),
-    instructions: `Workspace root: ${config.codebasePath}`,
+    instructions: `Workspace root: ${config.codebasePath}${memStr}`,
   };
 }
 
-function createReadOnlyTools(executor: ToolExecutor) {
+function createReadOnlyTools(executor: ToolExecutor, memory: MemoryStore) {
   return {
+    ...createMemoryTools(memory),
     read_file: tool({
       description: "Read a workspace file (relative path).",
       inputSchema: z.object({ path: z.string() }),
@@ -71,9 +76,11 @@ export async function runAsk(ctx:{reply:(t:string , o?:object)=>Promise<unknown>
      const config = readOnlyConfig();
   const tracker = new ActionTracker();
   const executor = new ToolExecutor(tracker, config);
-  const tools = { ...createReadOnlyTools(executor), ...extraWebTools(tracker) };
+  const memory = new MemoryStore();
+  memory.add(`User asked (Telegram): ${question.trim()}`, "event");
+  const tools = { ...createReadOnlyTools(executor, memory), ...extraWebTools(tracker) };
   const agent = new ToolLoopAgent({
-    ...agentOptions(config, 20),
+    ...agentOptions(config, 20, memory),
     tools,
   });
 
@@ -85,9 +92,11 @@ export async function runAgent(ctx: { reply: (t: string, o?: object) => Promise<
   const config = defaultAgentConfig();
   const tracker = new ActionTracker();
   const executor = new ToolExecutor(tracker, config);
-  const tools = createAgentTools(executor);
+  const memory = new MemoryStore();
+  memory.add(`User task (Telegram): ${goal.trim()}`, "event");
+  const tools = createAgentTools(executor, memory);
   const agent = new ToolLoopAgent({
-    ...agentOptions(config, 40),
+    ...agentOptions(config, 40, memory),
     tools,
   });
   const { text } = await agent.generate({ prompt: goal });
@@ -104,13 +113,14 @@ export async function runPlanSteps(
   const config = defaultAgentConfig();
   const tracker = new ActionTracker();
   const executor = new ToolExecutor(tracker, config);
-  const tools = { ...createAgentTools(executor), ...extraWebTools(tracker) };
+  const memory = new MemoryStore();
+  const tools = { ...createAgentTools(executor, memory), ...extraWebTools(tracker) };
 
   for (const step of steps) {
     await ctx.reply(`🔧 Executing: *${step.title}*`, { parse_mode: 'Markdown' });
     const prompt = [`Goal: ${plan.goal}`, `Step: ${step.title}`, step.description].join('\n');
     const agent = new ToolLoopAgent({
-      ...agentOptions(config, 30),
+      ...agentOptions(config, 30, memory),
       tools,
     });
     const { text } = await agent.generate({ prompt });

@@ -1,9 +1,12 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { ToolExecutor } from "./tool-executor";
+import type { MemoryStore } from "../../memory/store";
+import { createMemoryTools } from "../../memory/tools";
 
-export function createAgentTools(executor: ToolExecutor) {
+export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
   return {
+    ...createMemoryTools(memory),
     read_file: tool({
       description:
         "Read a text file from the workspace. Use a path relative to the project root.",

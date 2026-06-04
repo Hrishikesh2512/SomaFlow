@@ -14,6 +14,8 @@ import { ToolExecutor } from "../agent/tool-executor.ts";
 import { defaultAgentConfig } from "../agent/types.ts";
 import type { Plan, PlanStep } from "./types.ts";
 import { createWebTools } from "./web-tools.ts";
+import { MemoryStore } from "../../memory/store.ts";
+import { createMemoryTools } from "../../memory/tools.ts";
 
 const planSchema = z.object({
   researchSummary: z.string().optional(),
@@ -30,8 +32,9 @@ const planSchema = z.object({
     .max(15),
 });
 
-function readOnlyTools(executor: ToolExecutor) {
+function readOnlyTools(executor: ToolExecutor, memory: MemoryStore) {
   return {
+    ...createMemoryTools(memory),
     read_file: tool({
       description:
         "Read a text file from the workspace. Use a path relative to the project root.",
@@ -92,10 +95,12 @@ function readOnlyTools(executor: ToolExecutor) {
   };
 }
 
-const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
-  [
+const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean, memory: MemoryStore) => {
+  const mems = memory.getAll();
+  return [
     "You are a Plan-Mode planner. You DO NOT modify files.",
     `Workspace: ${codebase}`,
+    mems.length > 0 ? `Previous memory:\n${JSON.stringify(mems)}` : "",
     "Use read-only tools for codebase/skills research.",
     hasWeb
       ? "Web tools are available (web_search/web_crawl/fetch_url). Use only when needed."
@@ -103,8 +108,9 @@ const PLAN_INSTRUCTIONS = (codebase: string, hasWeb: boolean) =>
     "Output must match the provided JSON schema.",
     "Keep it short: 1–15 steps.",
   ].join("\n");
+};
 
-export async function generatePlan(goal: string) {
+export async function generatePlan(goal: string, memory: MemoryStore) {
   const config = defaultAgentConfig();
   const tracker = new ActionTracker();
   const executor = new ToolExecutor(tracker, config);
@@ -117,7 +123,7 @@ export async function generatePlan(goal: string) {
   })
 
 
-  const tools = { ...readOnlyTools(executor) , ...(hasWeb ? createWebTools(tracker) : {}) };
+  const tools = { ...readOnlyTools(executor, memory) , ...(hasWeb ? createWebTools(tracker) : {}) };
 
   console.log(chalk.cyan("\n🔍 Researching & drafting a plan…\n"));
 
@@ -125,7 +131,7 @@ export async function generatePlan(goal: string) {
     model,
     tools,
     stopWhen:stepCountIs(20),
-    system:PLAN_INSTRUCTIONS(config.codebasePath , hasWeb),
+    system:PLAN_INSTRUCTIONS(config.codebasePath , hasWeb, memory),
     prompt:`User goal: \n${goal}`,
     output:Output.object({schema:planSchema})
   });

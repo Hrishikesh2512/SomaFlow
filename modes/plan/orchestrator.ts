@@ -12,6 +12,10 @@ import { generatePlan } from "./planner.ts";
 import { printPlan, selectSteps } from "./selection.ts";
 import type { PlanStep } from "./types.ts";
 import { createWebTools } from "./web-tools.ts";
+import { MemoryStore } from "../../memory/store";
+
+
+const memory = new MemoryStore();
 
 
 function stepPrompt(goal: string, step: PlanStep): string {
@@ -25,7 +29,8 @@ export async function runPlanMode(): Promise<void> {
   const goal = await text({ message: "What is your goal?" });
   if (isCancel(goal) || !goal.trim()) return;
 
-  const plan = await generatePlan(goal);
+  const plan = await generatePlan(goal, memory);
+  memory.add(`User plan goal: ${goal.trim()}`, "event");
 
   printPlan(plan);
 
@@ -43,17 +48,23 @@ export async function runPlanMode(): Promise<void> {
 
 
   const tools = {
-    ...createAgentTools(executor),
+    ...createAgentTools(executor, memory),
     ...createWebTools(tracker)
   };
 
   for (const step of selected) {
     console.log(chalk.bold(`\n🔧 ${step.title}\n`));
 
+    const mems = memory.getAll();
     const agent = new ToolLoopAgent({
       model:getAgentModel(),
-      stopWhen:stepCountIs(30),
-      tools
+      tools,
+      instructions: [
+        "You are SomaFlow agent.",
+        mems.length > 0 ? `Previous memory:\n${JSON.stringify(mems)}` : "",
+        `Workspace root: ${config.codebasePath}`,
+        "All mutations are staged until approval.",
+      ].join("\n"),
     });
 
     const r = await agent.generate({prompt:stepPrompt(plan.goal , step)})
