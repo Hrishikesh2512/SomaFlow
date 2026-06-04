@@ -13,8 +13,10 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^2.0.48",
     "@clack/core": "^1.4.0",
     "@clack/prompts": "^1.5.0",
+    "@mendable/firecrawl-js": "^4.25.2",
     "@openrouter/ai-sdk-provider": "^2.9.0",
     "@types/node": "^25.9.1",
     "ai": "^6.0.195",
