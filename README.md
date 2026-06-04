@@ -2,14 +2,13 @@
 
 # 🌊 SomaFlow
 
-**A modular, multi-mode AI agent orchestrator — built natively with Bun and TypeScript.**
+**A state-of-the-art autonomous AI coding agent & orchestrator — built natively with Bun and TypeScript.**
 
-Run it in your terminal. Deploy it as a Telegram bot. Switch execution personas on the fly.
+Run it in your terminal. Deploy it as a Telegram bot. Let it write, review, and auto-correct your code.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Built with Bun](https://img.shields.io/badge/runtime-Bun-f472b6?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)](https://www.typescriptlang.org/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
 
@@ -17,20 +16,36 @@ Run it in your terminal. Deploy it as a Telegram bot. Switch execution personas 
 
 ## What is SomaFlow?
 
-SomaFlow is an open-source AI agent orchestrator that lets you route LLM interactions through four distinct behavioral modes — each with its own system prompt, context isolation, and execution logic. It runs natively via [Bun](https://bun.sh) for near-instant startup, supports a local terminal UI for debugging, and integrates directly with Telegram for deployment.
+SomaFlow is a highly capable, multi-agent orchestrator designed to act as your personal pair programmer. It doesn't just generate code snippets — it can navigate your file system, stage atomic changes, perform semantic searches, run background tasks, and **auto-correct its own errors** using a multi-agent feedback loop.
 
-Think of it as a lightweight, hackable backbone for building opinionated AI agents — not a monolithic framework, but a set of composable parts you can extend.
+Built natively on [Bun](https://bun.sh) for sub-100ms cold starts, it comes with a beautiful Terminal UI (TUI) for local debugging and a Telegram mode for remote execution.
 
 ---
 
-## Features
+## 🔥 Key Features
 
-- **⚡ Native speed** — powered by Bun for sub-100ms cold starts and TypeScript throughout
-- **🧠 Four execution modes** — swap agent personas and system prompts without restarting
-- **🖥️ Terminal UI** — debug and monitor agent behavior locally before deploying
-- **💬 Telegram integration** — ship your agent as a bot with minimal configuration
-- **🔌 LLM-provider agnostic** — works with OpenRouter, OpenAI, Anthropic, or any OpenAI-compatible endpoint
-- **📦 Modular architecture** — each mode is an isolated module; fork, replace, or extend independently
+### 🤖 Multi-Agent Architecture
+Instead of relying on a single LLM call, SomaFlow delegates tasks:
+1. **Planner Agent:** Creates a markdown-based task checklist (`task.md`) and designs the architecture (`implementation_plan.md`).
+2. **Executor Agent:** Navigates the codebase and executes the plan using 25+ tools.
+3. **Reviewer Agent:** Critiques the Executor's staged changes via a unified diff before you ever approve them.
+4. **Auto-Fix Agent:** Steps in if type-checks or linting fail to automatically repair the code.
+
+### 🛠️ Massive Tool Suite (25+ Tools)
+- **Filesystem:** Read lines, edit, replace, delete, create files and folders.
+- **Search & AST:** Ripgrep-style semantic search, regex symbol search, and file listing.
+- **Git & Shell:** Read-only command execution, queued mutating commands, and background detached tasks.
+- **Context Management:** AI-powered file summarization and session memory compression to prevent token bloat.
+- **Verification:** Runs `bunx tsc --noEmit`, `eslint --fix`, and `bun test` immediately.
+
+### 🛡️ The Auto-Correction Loop
+SomaFlow won't blindly commit broken code. After staging changes:
+1. It runs `eslint --fix` quietly to repair style issues.
+2. It runs `tsc --noEmit` and grabs any ESLint / TypeScript errors.
+3. If errors exist, it spawns an **Auto-Fix Agent** up to 2 times to resolve them before prompting you.
+
+### 🖥️ Interactive Approval UI
+Before modifying your filesystem, SomaFlow stages its changes. You get a Git-style diff view in your terminal and a 2-3 sentence AI critique from the Reviewer Agent. You can choose to approve all, review one-by-one, or reject.
 
 ---
 
@@ -38,159 +53,101 @@ Think of it as a lightweight, hackable backbone for building opinionated AI agen
 
 ```
 SomaFlow/
-├── ai/             # Core LLM integration: token streaming, OpenClaw engine, provider routing
-├── modes/          # Four behavioral mode modules — system prompts + execution logic
-│   ├── mode1/
-│   ├── mode2/
-│   ├── mode3/
-│   └── mode4/
-├── tui/            # Terminal UI for local debugging and agent monitoring
-├── index.ts        # Entry point — launches TUI or bot depending on environment
-├── .env.example    # Environment variable template
+├── ai/             # Core LLM integration, token streaming, Vercel AI SDK
+├── memory/         # Persistent context, session memory, and AI summarization
+├── modes/          # Four behavioral modes
+│   ├── agent/      # The autonomous coding agent (Orchestrator, Executor, Tracker, Approval)
+│   ├── telegram/   # Telegram bot mode routing and handlers
+│   ├── plan/       # Specialized planning mode
+│   └── chat/       # Standard conversational mode
+├── tui/            # Terminal UI and Markdown rendering
+├── index.ts        # Entry point
 └── bun.lockb
 ```
-
----
-
-## The Four Modes
-
-| Command | Mode | Description |
-|---|---|---|
-| `/mode1` | **Action** | Brief one-sentence explanation of Mode 1 behavior. |
-| `/mode2` | **Context** | Brief one-sentence explanation of Mode 2 behavior. |
-| `/mode3` | **Tool** | Brief one-sentence explanation of Mode 3 behavior. |
-| `/mode4` | **Creative** | Brief one-sentence explanation of Mode 4 behavior. |
-
-> Each mode is fully self-contained in `modes/`. To customize behavior, edit its system prompt or execution logic independently — no other modes are affected.
 
 ---
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) `>= 1.0` installed
-- An API key from an LLM provider (OpenRouter, OpenAI, Anthropic, etc.)
-- A Telegram Bot token from [@BotFather](https://t.me/botfather) *(only needed for bot deployment)*
+- An API key from an LLM provider (OpenRouter, OpenAI, Anthropic, Gemini, etc.)
+- A Telegram Bot token from [@BotFather](https://t.me/botfather) *(only if deploying the bot)*
 
 ---
 
 ## Getting Started
 
-### 1. Clone the repository
+### 1. Clone & Install
 
 ```bash
 git clone https://github.com/your-username/SomaFlow.git
 cd SomaFlow
-```
-
-### 2. Install dependencies
-
-```bash
 bun install
 ```
 
-### 3. Configure environment variables
+### 2. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in your credentials:
+Open `.env` and configure your keys:
 
 ```env
-# Required for Telegram bot deployment
-TELEGRAM_BOT_TOKEN=your_telegram_token_here
-
 # Required: LLM provider API key
-OPENROUTER_API_KEY=your_llm_provider_key_here
+OPENROUTER_API_KEY=your_key_here
+
+# Required for Telegram bot deployment
+TELEGRAM_BOT_TOKEN=your_token_here
 
 # Optional: override the default model
-# MODEL=openai/gpt-4o
+# MODEL=anthropic/claude-3-opus
 ```
 
-### 4. Run
+### 3. Run the Agent
 
-**Local terminal (recommended for development):**
+**Local Terminal UI (Recommended for coding):**
 
 ```bash
 bun run index.ts
 ```
+*(Inside the TUI, select "Agent" mode to start the autonomous coding loop).*
 
-**Telegram bot mode** is activated automatically when `TELEGRAM_BOT_TOKEN` is present in your environment.
-
----
-
-## Usage
-
-### Terminal Interface
-
-The TUI spins up an interactive session in your terminal. Use it to test mode switching, inspect token streams, and debug agent behavior before deploying.
-
-### Telegram Commands
-
-Once your bot is live, interact using:
-
-```
-/mode1   Switch to Action mode
-/mode2   Switch to Context mode
-/mode3   Switch to Tool mode
-/mode4   Switch to Creative mode
-```
+**Telegram Bot:**
+Activated automatically when `TELEGRAM_BOT_TOKEN` is present.
 
 ---
 
-## Configuration
+## Usage Example
 
-SomaFlow is configured entirely through environment variables. See `.env.example` for all supported options.
+Once the agent is running in the terminal, just give it a prompt:
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | ✅ | API key for your LLM provider |
-| `TELEGRAM_BOT_TOKEN` | Bot only | Token from @BotFather |
-| `MODEL` | ❌ | Override the default model (e.g. `openai/gpt-4o`) |
+> *"Refactor `auth.ts` to use JWT instead of sessions, add proper error handling, run the test suite, and fix any type errors you cause."*
+
+SomaFlow will:
+1. Parse the codebase.
+2. Stage the changes.
+3. Run ESLint and TypeScript.
+4. Auto-fix errors.
+5. Present a unified diff and a Reviewer critique for your approval.
 
 ---
 
 ## Contributing
 
-Contributions are welcome and encouraged. SomaFlow is intentionally modular so you can improve one part without touching others.
+SomaFlow is highly modular. You can easily add new tools to `modes/agent/agent-tools.ts` or tweak the auto-correction loop in `modes/agent/orchestrator.ts`. 
 
-**Good places to start:**
-
-- Add a new execution mode in `modes/`
-- Improve token streaming in `ai/`
-- Add support for a new LLM provider
-- Extend the TUI with new monitoring panels
-- Fix a bug or improve error handling
-
-**Workflow:**
-
-1. Fork the repo and create a feature branch (`git checkout -b feat/my-change`)
-2. Make your changes and add tests if applicable
-3. Open a pull request with a clear description of what changed and why
-
-Please open an issue first for larger changes so we can discuss the approach before you invest time in it.
+1. Fork the repo (`git checkout -b feat/my-change`)
+2. Make changes
+3. Open a PR
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
-
----
-
-## Roadmap
-
-- [ ] Web UI alongside the TUI
-- [ ] Persistent conversation memory
-- [ ] Discord integration
-- [ ] Plugin system for tool-use modes
-- [ ] Docker deployment template
-
-Have an idea? [Open an issue](https://github.com/your-username/SomaFlow/issues).
 
 ---
 
 ## License
 
 MIT — see [LICENSE](LICENSE) for details. Free to use, modify, and distribute.
-
----
 
 <div align="center">
   <sub>Built with 🌊 by the SomaFlow contributors</sub>

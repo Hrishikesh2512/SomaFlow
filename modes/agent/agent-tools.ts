@@ -28,6 +28,14 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         executor.readFileLines(p, startLine, endLine),
     }),
 
+    summarize_file: tool({
+      description: "Get a high-level AI summary of a file's contents, exports, and purpose. Much cheaper than reading the whole file.",
+      inputSchema: z.object({
+        path: z.string().describe("Relative file path"),
+      }),
+      execute: async ({ path: p }) => executor.summarizeFile(p),
+    }),
+
     create_file: tool({
       description:
         "Stage creation of a new file (not written until the user approves).",
@@ -129,6 +137,22 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         command: z.string().describe("Single command; runs with shell: true"),
       }),
       execute: async ({ command }) => executor.queueShell(command),
+    }),
+
+    spawn_background_task: tool({
+      description: "Spawn a shell command in the background (detached). Returns a Task ID to check logs later. Useful for long-running processes (e.g. servers, huge builds).",
+      inputSchema: z.object({
+        command: z.string().describe("Command to run in background"),
+      }),
+      execute: async ({ command }) => executor.spawnBackgroundTask(command),
+    }),
+
+    check_background_task: tool({
+      description: "Read the current log output of a background task by its ID.",
+      inputSchema: z.object({
+        taskId: z.string().describe("Task ID returned from spawn_background_task"),
+      }),
+      execute: async ({ taskId }) => executor.checkBackgroundTask(taskId),
     }),
 
     ask_user: tool({

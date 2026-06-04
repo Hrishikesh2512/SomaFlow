@@ -74,6 +74,25 @@ export async function runApprovalFlow(
     return false;
   }
 
+  const groups = groupPending(pending);
+
+  const allPatches = groups.map(g => g.patch).filter(Boolean).join("\n\n");
+  if (allPatches.trim()) {
+    console.log(chalk.cyan("\n[Reviewer] Analyzing proposed changes..."));
+    try {
+      const { getAgentModel } = await import("../../ai/index.ts") as any;
+      const { generateText } = await import("ai");
+      const review = await generateText({
+        model: getAgentModel(),
+        system: "You are a strict code reviewer. Review the following proposed changes. Give a brief (2-3 sentence) critique. Call out obvious bugs, missing exports, or style issues. If it looks perfect, just say 'LGTM'. Do not write code.",
+        prompt: allPatches
+      });
+      console.log(chalk.cyan("▼ Reviewer Critique ▼\n") + renderTerminalMarkdown(review.text.trim()) + "\n");
+    } catch (e) {
+      console.log(chalk.dim("  (Reviewer agent unavailable)\n"));
+    }
+  }
+
   const choice = await select({
     message: "Apply staged changes?",
     options: [
@@ -93,7 +112,7 @@ export async function runApprovalFlow(
     return true;
   }
 
-  for (const g of groupPending(pending)) {
+  for (const g of groups) {
     while (true) {
       const opt = await select({
         message: chalk.bold(g.label),

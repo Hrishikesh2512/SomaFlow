@@ -90,15 +90,25 @@ export async function runAgentMode(){
     // -- AUTO-CORRECTION LOOP --
     const MAX_RETRIES = 2;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        console.log(chalk.cyan(`\n[Auto-Check] Running typecheck (attempt ${attempt + 1}/${MAX_RETRIES})...`));
+        console.log(chalk.cyan(`\n[Auto-Check] Running ESLint auto-fix and typecheck (attempt ${attempt + 1}/${MAX_RETRIES})...`));
+        
+        // Auto-fix simple style errors quietly
+        executor.runImmediateShell("bunx eslint --fix .");
+        
+        // Gather remaining errors
+        const eslintOutput = executor.runImmediateShell("bunx eslint .");
         const tscOutput = executor.runImmediateShell("bunx tsc --noEmit");
 
-        if (!tscOutput.includes("error TS")) {
-            console.log(chalk.green("  ✓ Typecheck passed — no errors.\n"));
+        // ESLint outputs 'problem' or 'error' if it fails, TS outputs 'error TS'
+        const hasLintErrors = eslintOutput.includes("error") || eslintOutput.includes("problem");
+        const hasTscErrors = tscOutput.includes("error TS");
+
+        if (!hasLintErrors && !hasTscErrors) {
+            console.log(chalk.green("  ✓ Code quality checks passed — no errors.\n"));
             break;
         }
 
-        console.log(chalk.yellow(`  ⚠ Typecheck found errors. Auto-correcting...\n`));
+        console.log(chalk.yellow(`  ⚠ Found errors (Lint: ${hasLintErrors}, TS: ${hasTscErrors}). Auto-correcting...\n`));
 
         const fixTracker = new ActionTracker();
         const fixExecutor = new ToolExecutor(fixTracker, config);
@@ -109,7 +119,7 @@ export async function runAgentMode(){
             stopWhen: stepCountIs(20),
             instructions: [
                 "You are SomaFlow Auto-Fix Agent.",
-                "The previous code changes introduced TypeScript errors.",
+                "The previous code changes introduced TypeScript or ESLint errors.",
                 "Fix ONLY the errors shown below. Do not change unrelated code.",
                 `Workspace root: ${config.codebasePath}`,
                 "All mutations are staged until approval.",
@@ -118,7 +128,7 @@ export async function runAgentMode(){
         });
 
         const fixResult = await fixAgent.generate({
-            prompt: `Fix these TypeScript errors:\n\n${tscOutput}`,
+            prompt: `Fix these errors:\n\n[ESLint Output]\n${eslintOutput}\n\n[TypeScript Output]\n${tscOutput}`,
             onStepFinish: ({ toolCalls }) => {
                 for (const tc of toolCalls) {
                     const preview = JSON.stringify(tc.input).slice(0, 160);

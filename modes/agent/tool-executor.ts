@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import type {AgentConfig, ActionLog} from './types';
 import{ActionTracker} from './action-tracker';
 import { MemoryStore } from "../../memory/store";
@@ -112,6 +113,42 @@ export class ToolExecutor{
       status: "executed",
     });
     return text;
+  }
+
+  async summarizeFile(rel: string): Promise<string> {
+    this.assertNotExcluded(rel, "summarize_file");
+    const abs = this.resolveSafe(rel);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      throw new Error(`File not found: ${rel}`);
+    }
+    const st = fs.statSync(abs);
+    // Even for summarization, avoid huge binaries, but allow larger text files.
+    if (st.size > 2 * 1024 * 1024) {
+      throw new Error(`File too large for summarization: ${rel}`);
+    }
+    const text = fs.readFileSync(abs, "utf8");
+    
+    try {
+      const { default: getModel } = await import("../../ai/ai.config.ts") as any;
+      const { generateText } = await import("ai");
+      
+      const result = await generateText({
+        model: getModel.getAgentModel(),
+        system: "You are a code summarizer. Your job is to output a concise, technical summary of the provided file. Focus on exports, key classes, and main purpose. Keep it under 150 words.",
+        prompt: `File: ${rel}\n\n${text}`
+      });
+
+      const summary = result.text.trim();
+      this.tracker.log({
+        type: "code_analysis",
+        path: this.norm(rel),
+        details: { after: summary, toolName: "summarize_file" },
+        status: "executed",
+      });
+      return summary;
+    } catch (e: any) {
+      throw new Error(`Failed to summarize file: ${e.message}`);
+    }
   }
 
   readFileLines(rel: string, startLine: number, endLine: number): string {
@@ -553,7 +590,7 @@ export class ToolExecutor{
       maxBuffer: 16 * 1024 * 1024,
     });
     
-    const output = (r.stdout || "") + "\\n" + (r.stderr || "");
+    const output = (r.stdout || "") + "\n" + (r.stderr || "");
     this.tracker.log({
       type: "code_analysis",
       path: "shell",
@@ -561,6 +598,48 @@ export class ToolExecutor{
       status: "executed",
     });
     return output.trim() || "(no output)";
+  }
+
+  spawnBackgroundTask(command: string): string {
+    const taskId = randomUUID();
+    const logPath = path.join(this.config.codebasePath, `.somaflow-task-${taskId}.log`);
+    
+    const out = fs.openSync(logPath, "a");
+    const err = fs.openSync(logPath, "a");
+
+    const subprocess = spawn(command, [], {
+      shell: true,
+      cwd: this.config.codebasePath,
+      detached: true,
+      stdio: ["ignore", out, err],
+    });
+
+    subprocess.unref();
+
+    const info = `Background task spawned.\nTask ID: ${taskId}\nLog Path: ${logPath}\nUse 'check_background_task' to read the log.`;
+    this.tracker.log({
+      type: "code_analysis",
+      path: "background_task",
+      details: { after: info, toolName: "spawn_background_task", command },
+      status: "executed",
+    });
+    return info;
+  }
+
+  checkBackgroundTask(taskId: string): string {
+    const logPath = path.join(this.config.codebasePath, `.somaflow-task-${taskId}.log`);
+    if (!fs.existsSync(logPath)) {
+      throw new Error(`No log found for task ID: ${taskId}`);
+    }
+    const logContent = fs.readFileSync(logPath, "utf8");
+    const output = `--- Log for Task ${taskId} ---\n${logContent || "(empty)"}`;
+    this.tracker.log({
+      type: "code_analysis",
+      path: "background_task",
+      details: { after: output, toolName: "check_background_task", command: taskId },
+      status: "executed",
+    });
+    return output;
   }
 
   skillRoots(): string[] {
