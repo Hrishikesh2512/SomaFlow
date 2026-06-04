@@ -32,20 +32,35 @@ export async function runAgentMode(){
     const executor = new ToolExecutor(tracker, config);
     const tools = createAgentTools(executor, memory);
 
+    // -- PLANNER PHASE --
+    console.log(chalk.cyan("\\n[Planner] Thinking about how to accomplish this..."));
+    const { generateText } = await import("ai");
+    const plannerResult = await generateText({
+        model: getAgentModel(),
+        system: "You are the SomaFlow Planner Agent. Given a user goal and codebase context, output a concise Markdown checklist of steps to accomplish it. Do NOT write code, just the plan.",
+        prompt: `Context:\\n${context.length > 0 ? JSON.stringify(context) : "None"}\\n\\nGoal: ${goal.trim()}`
+    });
+    const plan = plannerResult.text;
+    console.log(chalk.cyan("[Planner] Plan generated:\\n") + renderTerminalMarkdown(plan));
+
+    // -- EXECUTOR PHASE --
+    const executorPrompt = `Task:\\n${goal.trim()}\\n\\nFollow this plan:\\n${plan}`;
+
     const agent = new ToolLoopAgent({
         model: getAgentModel(),
         stopWhen: stepCountIs(40),
         instructions: [
-            "You are SomaFlow agent.",
-            context.length > 0 ? `Previous memory:\n${JSON.stringify(context)}` : "",
+            "You are SomaFlow Executor Agent.",
+            "Follow the provided plan step-by-step.",
+            context.length > 0 ? `Previous memory:\\n${JSON.stringify(context)}` : "",
             `Workspace root: ${config.codebasePath}`,
             "All mutations are staged until approval.",            
-        ].join("\n"),
+        ].join("\\n"),
         tools,
     });
 
     const result = await agent.generate({
-        prompt: prompt,
+        prompt: executorPrompt,
         onStepFinish: ({ toolCalls }) => {
             for (const tc of toolCalls) {
                 const preview = JSON.stringify(tc.input).slice(0, 160);

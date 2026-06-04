@@ -4,7 +4,8 @@ export type ActionType =
   | 'file_delete'
   | 'folder_create'
   | 'code_analysis'
-  | 'tool_execute';
+  | 'tool_execute'
+  | 'ask_user';
 
 export type ActionStatus = 'pending' | 'executed' | 'approved' | 'rejected';
 
@@ -63,6 +64,7 @@ export function isMutationType(t: ActionType): boolean {
     t === 'file_modify' ||
     t === 'file_delete' ||
     t === 'folder_create' ||
-    t === 'tool_execute'
+    t === 'tool_execute' ||
+    t === 'ask_user'
   );
 }

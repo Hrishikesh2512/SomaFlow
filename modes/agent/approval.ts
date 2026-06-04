@@ -16,7 +16,7 @@ function groupPending(pending: ActionLog[]): ReviewGroup[] {
   const shells: ActionLog[] = [];
 
   for (const a of pending) {
-    if (a.type === "tool_execute") {
+    if (a.type === "tool_execute" || a.type === "ask_user") {
       shells.push(a);
       continue;
     }
@@ -53,7 +53,7 @@ function groupPending(pending: ActionLog[]): ReviewGroup[] {
 
   for (const s of shells) {
     groups.push({
-      label: `Shell: ${s.details.command ?? "(no command)"}`,
+      label: `${s.type === 'ask_user' ? 'Ask User' : 'Shell'}: ${s.details.command ?? "(no command)"}`,
       actionIds: [s.id],
       patch: null,
     });

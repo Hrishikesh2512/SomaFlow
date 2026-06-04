@@ -36,6 +36,18 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
       execute: async ({ path: p, content }) => executor.modifyFile(p, content),
     }),
 
+    replace_in_file: tool({
+      description:
+        "Stage a partial replacement in an existing file (pending approval). Target content must match exactly once.",
+      inputSchema: z.object({
+        path: z.string(),
+        targetContent: z.string().describe("Exact string to be replaced"),
+        replacementContent: z.string().describe("New content to replace with"),
+      }),
+      execute: async ({ path: p, targetContent, replacementContent }) =>
+        executor.replaceInFile(p, targetContent, replacementContent),
+    }),
+
     delete_file: tool({
       description: "Stage deletion of a file (pending approval).",
       inputSchema: z.object({
@@ -93,6 +105,53 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
         command: z.string().describe("Single command; runs with shell: true"),
       }),
       execute: async ({ command }) => executor.queueShell(command),
+    }),
+
+    ask_user: tool({
+      description:
+        "Pause agent execution to ask the user a clarifying question. Useful when stuck or ambiguous.",
+      inputSchema: z.object({
+        question: z.string().describe("The question to ask the user"),
+      }),
+      execute: async ({ question }) => executor.askUser(question),
+    }),
+
+    web_search: tool({
+      description: "Search the web for information (e.g., documentation, errors, general queries).",
+      inputSchema: z.object({
+        query: z.string(),
+      }),
+      execute: async ({ query }) => executor.webSearch(query),
+    }),
+
+    git_execute: tool({
+      description: "Execute a Git command. Use for read-only commands (status, log, diff, branch) to get immediate output, and mutating commands (commit, checkout, push) to queue for approval.",
+      inputSchema: z.object({
+        command: z.string().describe("The git command to run (e.g., 'git status', 'git commit -m \"msg\"')"),
+      }),
+      execute: async ({ command }) => {
+        if (!command.startsWith("git ")) throw new Error("Only git commands allowed.");
+        const isReadOnly = /^(git status|git log|git diff|git show|git branch)/.test(command);
+        if (isReadOnly) {
+          return executor.runImmediateShell(command);
+        } else {
+          return executor.queueShell(command);
+        }
+      },
+    }),
+
+    run_typecheck: tool({
+      description: "Run the TypeScript compiler (tsc --noEmit) to check for errors immediately. Use this to verify code before finishing.",
+      inputSchema: z.object({}),
+      execute: async () => executor.runImmediateShell("npx tsc --noEmit"),
+    }),
+
+    search_symbol: tool({
+      description: "Search the codebase for the definition of a specific symbol (class, function, variable, interface).",
+      inputSchema: z.object({
+        symbolName: z.string(),
+      }),
+      execute: async ({ symbolName }) => executor.searchSymbol(symbolName),
     }),
 
     list_skills: tool({
