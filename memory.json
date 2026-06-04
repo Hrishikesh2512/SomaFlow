@@ -16,5 +16,35 @@
     "type": "event",
     "content": "User task: what was my last query",
     "timestamp": 1780570577923
+  },
+  {
+    "id": "8aaeb8a7-edd0-4d97-805b-0ecf70ee87be",
+    "type": "event",
+    "content": "User task: hello",
+    "timestamp": 1780571808482
+  },
+  {
+    "id": "0da91a79-c64b-48ce-b2de-c732c8f4e36a",
+    "type": "event",
+    "content": "User question: Hey who is the pm of india",
+    "timestamp": 1780571890811
+  },
+  {
+    "id": "dcb3d406-e239-489b-af91-495ccc31289a",
+    "type": "event",
+    "content": "User question: hello",
+    "timestamp": 1780571945255
+  },
+  {
+    "id": "79271f13-b9c0-462f-a6d6-378c47eb43d4",
+    "type": "event",
+    "content": "User task: hello",
+    "timestamp": 1780571988871
+  },
+  {
+    "id": "b3857591-45d7-4077-8f6a-b79d8359ab0a",
+    "type": "event",
+    "content": "User question: and what is the capital of brazil",
+    "timestamp": 1780572057439
   }
 ]

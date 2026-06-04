@@ -3,6 +3,7 @@ import chalk from "chalk"
 import figlet from "figlet"
 import { runCliMode } from "../modes/cli";
 import { runTelegramMode } from "../modes/telegram";
+import { resolveModel, setActiveModel } from "../ai";
 
 const BANNER_FONT='ANSI SHADOW';
 const SHADOW = chalk.hex('#5b4d9e');
@@ -37,6 +38,10 @@ export async function runWakeup(){
     }
 
     printBannerWithShadow(ascii)
+
+    // First resolve the model (local vs online)
+    const model = await resolveModel();
+    setActiveModel(model);
 
     const mode = await select({
         message:"Which mode you want to proceed with?",
