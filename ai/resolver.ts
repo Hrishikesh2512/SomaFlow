@@ -93,8 +93,8 @@ export async function resolveModel(): Promise<LanguageModel> {
     const choice = await select({
       message: "Which AI backend?",
       options: [
-        { value: "local", label: "🖥️  Local  — Ollama (private, offline)" },
-        { value: "online", label: "🌐  Online — OpenRouter (cloud, API key required)" },
+        { value: "local", label: "🖥️  Local (Ollama)" },
+        { value: "online", label: "🌐  Online(On Network)" },
       ],
     });
     if (isCancel(choice)) process.exit(0);
