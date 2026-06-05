@@ -87,55 +87,54 @@ bun install
 
 ### 2. Configure Environment
 
-```bash
-cp .env.example .env
-```
-
-Open `.env` and configure your keys:
-
-```env
-# Required: LLM provider API key
-OPENROUTER_API_KEY=your_key_here
-
-# Required for Telegram bot deployment
-TELEGRAM_BOT_TOKEN=your_token_here
-
-# Optional: override the default model
-# MODEL=anthropic/claude-3-opus
-```
-
-### 3. Run the Agent
-
-**Local Terminal UI (Recommended for coding):**
+On your first run, SomaFlow will guide you through an interactive onboarding wizard to configure your preferred model, API keys, and enable core plugins.
 
 ```bash
 bun run index.ts
 ```
-*(Inside the TUI, select "Agent" mode to start the autonomous coding loop).*
 
-**Telegram Bot:**
-Activated automatically when `TELEGRAM_BOT_TOKEN` is present.
+*(This will generate a `~/.somaflow.json` configuration file).*
+
+### 3. Usage
+
+After setup, run SomaFlow as a CLI:
+
+```bash
+# See all available plugins and commands
+bun run index.ts --help
+
+# Launch the autonomous coding agent
+bun run index.ts agent
+
+# Start standard chat mode
+bun run index.ts chat
+
+# Start the telegram bot background listener
+bun run index.ts telegram
+```
 
 ---
 
-## Usage Example
+## 🧩 Plugin Ecosystem
 
-Once the agent is running in the terminal, just give it a prompt:
+SomaFlow is fully extensible via its open plugin platform.
 
-> *"Refactor `auth.ts` to use JWT instead of sessions, add proper error handling, run the test suite, and fix any type errors you cause."*
+### Installing Community Plugins
+```bash
+bun run install-plugin <git-repo-url>
+```
 
-SomaFlow will:
-1. Parse the codebase.
-2. Stage the changes.
-3. Run ESLint and TypeScript.
-4. Auto-fix errors.
-5. Present a unified diff and a Reviewer critique for your approval.
+### Creating Your Own Plugin
+```bash
+bun run create-plugin
+```
+This will scaffold a new plugin in the `./plugins/` directory.
 
 ---
 
 ## Contributing
 
-SomaFlow is highly modular. You can easily add new tools to `modes/agent/agent-tools.ts` or tweak the auto-correction loop in `modes/agent/orchestrator.ts`. 
+SomaFlow is highly modular. You can easily add new tools to the Agent plugin or create entirely new plugins.
 
 1. Fork the repo (`git checkout -b feat/my-change`)
 2. Make changes

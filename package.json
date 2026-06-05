@@ -6,7 +6,12 @@
   "bin": {
     "SomaFlow": "./index.ts"
   },
+  "scripts": {
+    "create-plugin": "bun run ./scripts/create-plugin.ts",
+    "install-plugin": "bun run ./scripts/install-plugin.ts"
+  },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
@@ -16,6 +21,9 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
+    "@ai-sdk/google": "^3.0.80",
+    "@ai-sdk/openai": "^3.0.68",
     "@ai-sdk/openai-compatible": "^2.0.48",
     "@clack/core": "^1.4.0",
     "@clack/prompts": "^1.5.0",
