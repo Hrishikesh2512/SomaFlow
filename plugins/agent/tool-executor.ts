@@ -6,6 +6,11 @@ import { randomUUID } from "node:crypto";
 import type {AgentConfig, ActionLog} from './types';
 import{ActionTracker} from './action-tracker';
 import { MemoryStore } from "../../src/memory/store";
+import { GitClient, getGitRoot } from "../../src/git/client";
+import { guardCheckout, guardPush, guardCommit, guardDestructive } from "../../src/git/guards";
+import { takeSnapshot } from "../../src/history/index";
+import { createSearchProvider, formatSearchResults } from "../../src/web/search";
+import { fetchPageAsMarkdown, npmDocsUrl } from "../../src/web/fetcher";
 
 const memory = new MemoryStore();
 
@@ -50,10 +55,14 @@ export class ToolExecutor{
   private readonly norm = (rel: string) =>
     path.posix.normalize(rel.split(path.sep).join("/")).replace(/^\.\//, "");
 
+    private readonly git: GitClient;
+
     constructor(
         private readonly tracker:ActionTracker,
         private readonly config:AgentConfig
-    ){}
+    ){
+      this.git = new GitClient(config.codebasePath);
+    }
 
   private resolveSafe(rel: string): string {
     const abs = path.resolve(this.config.codebasePath, rel);
@@ -187,10 +196,11 @@ export class ToolExecutor{
     }
     this.deleted.delete(key);
     this.overlay.set(key, content);
+    const snap = takeSnapshot(this.config.codebasePath, rel, content, `create_file: ${rel}`);
     this.tracker.log({
       type: "file_create",
       path: key,
-      details: { after: content },
+      details: { after: content, snapshotId: snap.id },
       status: "pending",
     });
     return `Staged new file: ${key}`;
@@ -205,10 +215,11 @@ export class ToolExecutor{
       throw new Error(`modify_file: file not found: ${rel}`);
     const key = this.norm(rel);
     this.overlay.set(key, content);
+    const snap = takeSnapshot(this.config.codebasePath, rel, content, `modify_file: ${rel}`);
     this.tracker.log({
       type: "file_modify",
       path: key,
-      details: { before, after: content },
+      details: { before, after: content, snapshotId: snap.id },
       status: "pending",
     });
     return `Staged update: ${key}`;
@@ -254,10 +265,11 @@ export class ToolExecutor{
     const key = this.norm(rel);
     this.overlay.delete(key);
     this.deleted.add(key);
+    const snap = takeSnapshot(this.config.codebasePath, rel, undefined, `delete_file: ${rel}`);
     this.tracker.log({
       type: "file_delete",
       path: key,
-      details: { before },
+      details: { before, snapshotId: snap.id },
       status: "pending",
     });
     return `Staged delete: ${key}`;
@@ -527,56 +539,52 @@ export class ToolExecutor{
 
   async webSearch(query: string): Promise<string> {
     try {
-      // Use a free API like DuckDuckGo Lite via a proxy or an open search endpoint.
-      // Since Node doesn't have an in-built DDG wrapper, let's use the public duckduckgo html search as a simple workaround or just use fetch on a known proxy.
-      // For this implementation, we will mock it or use an open registry, but we can do a simple GET request.
-      const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json`);
-      if (!res.ok) {
-        throw new Error(`Search failed: ${res.statusText}`);
-      }
-      const data = await res.json() as any;
-      const abstract = data.AbstractText;
-      const related = data.RelatedTopics?.map((t: any) => t.Text).filter(Boolean).join("\\n- ");
-      const results = `Abstract:\\n${abstract}\\n\\nRelated:\\n- ${related}`;
-
+      const provider = createSearchProvider();
+      const results = await provider.search(query, 5);
+      const formatted = formatSearchResults(results, query);
       this.tracker.log({
-        type: "code_analysis", // mapping to an executed event
+        type: "code_analysis",
         path: "web",
-        details: { after: results, toolName: "web_search", command: query },
+        details: { after: formatted, toolName: "web_search", command: query },
         status: "executed",
       });
-      return results || "No results found.";
+      return formatted;
     } catch (e: any) {
       throw new Error(`Web search error: ${e.message}`);
     }
   }
 
-  async fetchUrl(url: string, method: string = "GET"): Promise<string> {
+  async fetchDocs(packageOrUrl: string): Promise<string> {
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "User-Agent": "SomaFlow/1.0" },
-        signal: AbortSignal.timeout(15000),
+      // If it looks like a URL, fetch directly. Otherwise treat as npm package name.
+      const url = packageOrUrl.startsWith("http")
+        ? packageOrUrl
+        : npmDocsUrl(packageOrUrl);
+      const result = await fetchPageAsMarkdown(url);
+      const out = `${result.citation}\n\n${result.markdown}`;
+      this.tracker.log({
+        type: "code_analysis",
+        path: "docs",
+        details: { after: out, toolName: "fetch_docs", command: packageOrUrl },
+        status: "executed",
       });
-      const contentType = res.headers.get("content-type") || "";
-      let body: string;
-      if (contentType.includes("application/json")) {
-        body = JSON.stringify(await res.json(), null, 2);
-      } else {
-        body = await res.text();
-      }
-      // Truncate very large responses
-      if (body.length > 50000) {
-        body = body.slice(0, 50000) + "\n... (truncated)";
-      }
-      const result = `HTTP ${res.status} ${res.statusText}\nContent-Type: ${contentType}\n\n${body}`;
+      return out;
+    } catch (e: any) {
+      throw new Error(`fetch_docs error: ${e.message}`);
+    }
+  }
+
+  async fetchUrl(url: string, _method: string = "GET"): Promise<string> {
+    try {
+      const result = await fetchPageAsMarkdown(url);
+      const out = `${result.citation}\n${result.fromCache ? "(from cache)" : "(freshly fetched)"}\n\n${result.markdown}`;
       this.tracker.log({
         type: "code_analysis",
         path: "fetch",
-        details: { after: result, toolName: "fetch_url", command: url },
+        details: { after: out, toolName: "fetch_url", command: url },
         status: "executed",
       });
-      return result;
+      return out;
     } catch (e: any) {
       throw new Error(`fetch_url error: ${e.message}`);
     }
@@ -760,6 +768,52 @@ export class ToolExecutor{
     this.deleted.clear()
   }
 
+  // ─── Git methods ────────────────────────────────────────────────────────────
 
+  gitStatus(): string {
+    return this.git.status();
+  }
 
+  gitDiff(file?: string): string {
+    return this.git.diff(file);
+  }
+
+  gitLog(n = 10): string {
+    return this.git.log(n);
+  }
+
+  gitCommit(message: string): string {
+    const guard = guardCommit(this.git);
+    if (!guard.ok) throw new Error(guard.reason);
+    const cmd = `git add -A && git commit -m ${JSON.stringify(message)}`;
+    return this.queueShell(cmd);
+  }
+
+  gitCreateBranch(name: string): string {
+    const guard = guardDestructive(name);
+    if (!guard.ok) throw new Error(guard.reason);
+    return this.queueShell(`git checkout -b ${JSON.stringify(name)}`);
+  }
+
+  gitCheckout(branch: string): string {
+    const guard = guardCheckout(this.git, branch);
+    if (!guard.ok) throw new Error(guard.reason);
+    return this.queueShell(`git checkout ${JSON.stringify(branch)}`);
+  }
+
+  gitPush(remote = "origin", branch?: string): string {
+    const guard = guardPush(this.git);
+    if (!guard.ok) throw new Error(guard.reason);
+    const b = branch ?? this.git.currentBranch();
+    return this.queueShell(`git push ${remote} ${b}`);
+  }
+
+  gitStash(message?: string): string {
+    const msg = message ? ` -m ${JSON.stringify(message)}` : "";
+    return this.queueShell(`git stash push${msg}`);
+  }
+
+  gitStashList(): string {
+    return this.git.stashes();
+  }
 }

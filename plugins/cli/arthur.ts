@@ -11,6 +11,8 @@ import { MemoryStore } from "../../src/memory/store";
 import { saveConfig, getConfig } from "../../src/core/config/onboarding";
 import type { SomaConfig } from "../../src/core/config/onboarding";
 import { startTelegramBot, stopTelegramBot, isTelegramRunning } from "../telegram/bot";
+import { undoLast, getHistory } from "../../src/history/index";
+import { formatCompactRepoMap } from "../../src/repomap/formatter";
 
 const memory = new MemoryStore();
 
@@ -24,6 +26,8 @@ ${chalk.bold(agentName + " Slash Commands")}
   ${PROMPT_STYLE("/model")}       Switch the AI model interactively
   ${PROMPT_STYLE("/telegram")}    Toggle the Telegram bot on or off
   ${PROMPT_STYLE("/status")}      Show current model, Telegram, and workspace info
+  ${PROMPT_STYLE("/undo")}        Undo Arthur's last file modification or creation
+  ${PROMPT_STYLE("/history")}     Show the last 10 actions Arthur performed
   ${PROMPT_STYLE("/clear")}       Clear ${agentName}'s short-term memory
   ${PROMPT_STYLE("/help")}        Show this help message
   ${PROMPT_STYLE("/exit")}        Quit SomaFlow
@@ -46,6 +50,16 @@ async function handleSlashCommand(input: string, config: SomaConfig): Promise<{ 
   if (cmd === "/clear") {
     memory.clear?.();
     console.log(INFO_STYLE("  Memory cleared.\n"));
+    return {};
+  }
+
+  if (cmd === "/undo") {
+    console.log(undoLast(config.defaultWorkspace));
+    return {};
+  }
+
+  if (cmd === "/history") {
+    console.log(getHistory());
     return {};
   }
 
@@ -181,6 +195,7 @@ async function runArthurTask(goal: string, agentName: string) {
       context.length > 0 ? `Previous memory:\n${JSON.stringify(context)}` : "",
       `Workspace root: ${config.codebasePath}`,
       "All file mutations are staged until the user approves them.",
+      formatCompactRepoMap(),
     ].filter(Boolean).join("\n"),
     tools,
   });
@@ -239,10 +254,11 @@ async function runArthurTask(goal: string, agentName: string) {
       model: getAgentModel(),
       stopWhen: stepCountIs(20),
       instructions: [
-        `You are ${agentName}, SomaFlow's auto-fix agent.`,
-        "Fix ONLY the TypeScript/ESLint errors shown. Do not change unrelated code.",
+        `You are ${agentName}, auto-fixing quality errors in SomaFlow.`,
+        "Do NOT change logic or add features. ONLY fix TS/Lint errors.",
         `Workspace root: ${config.codebasePath}`,
-        "All mutations are staged until approval.",
+        formatCompactRepoMap(),
+        "All file mutations are staged until approval.",
       ].join("\n"),
       tools: createAgentTools(fixExecutor, memory),
     });

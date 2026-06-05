@@ -20,6 +20,13 @@ const WakeupPlugin: SomaPlugin = {
                     await startTelegramBot(config.telegram.botToken, config.telegram.ownerId);
                 }
 
+                if (config?.defaultWorkspace) {
+                    const { startRepoWatcher } = await import("../../src/repomap/watcher");
+                    const { repoMapStore } = await import("../../src/repomap/store");
+                    startRepoWatcher(config.defaultWorkspace);
+                    await repoMapStore.refresh(config.defaultWorkspace).catch(() => {});
+                }
+
                 const { runArthurCli } = await import("../../plugins/cli/arthur");
                 await runArthurCli();
             });

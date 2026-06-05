@@ -21,6 +21,7 @@ export interface ActionLog {
     toolResult?: string;
     error?: string;
     command?: string;
+    snapshotId?: string;
   };
   status: ActionStatus;
   userApproved?: boolean;
