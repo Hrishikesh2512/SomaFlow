@@ -24,7 +24,7 @@ This project follows our Code of Conduct (`CODE_OF_CONDUCT.md`). By participatin
 2. Clone your fork locally:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/SomaFlow.git
+git clone https://github.com/Hrishikesh2512/SomaFlow.git
 cd SomaFlow
 ```
 
