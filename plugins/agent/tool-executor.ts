@@ -65,7 +65,9 @@ export class ToolExecutor{
     }
 
   private resolveSafe(rel: string): string {
-    const abs = path.resolve(this.config.codebasePath, rel);
+    // LLMs often hallucinate a leading slash before Windows drive letters (e.g., /C:/)
+    const cleanedRel = rel.replace(/^\/([A-Z]:)/i, "$1");
+    const abs = path.resolve(this.config.codebasePath, cleanedRel);
     const root = path.resolve(this.config.codebasePath);
     const relCheck = path.relative(root, abs);
     if (relCheck.startsWith("..") || path.isAbsolute(relCheck)) {

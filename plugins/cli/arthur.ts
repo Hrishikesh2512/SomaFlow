@@ -23,6 +23,7 @@ const ARTHUR_STYLE = chalk.hex("#c4b5fd");
 const getHelpText = (agentName: string) => `
 ${chalk.bold(agentName + " Slash Commands")}
 
+  ${PROMPT_STYLE("/cd <path>")}   Change Arthur's active workspace directory
   ${PROMPT_STYLE("/model")}       Switch the AI model interactively
   ${PROMPT_STYLE("/telegram")}    Toggle the Telegram bot on or off
   ${PROMPT_STYLE("/status")}      Show current model, Telegram, and workspace info
@@ -33,37 +34,55 @@ ${chalk.bold(agentName + " Slash Commands")}
   ${PROMPT_STYLE("/exit")}        Quit SomaFlow
 `;
 
-async function handleSlashCommand(input: string, config: SomaConfig): Promise<{ exit?: boolean; configChanged?: boolean }> {
-  const cmd = input.trim().toLowerCase();
+async function handleSlashCommand(input: string, config: SomaConfig, activeWorkspace: string): Promise<{ exit?: boolean; configChanged?: boolean; changeWorkspace?: string }> {
+  const cmd = input.trim();
+  const lowerCmd = cmd.toLowerCase();
   const agentName = config.agentName || "Arthur";
 
-  if (cmd === "/help") {
+  if (lowerCmd === "/help") {
     console.log(getHelpText(agentName));
     return {};
   }
 
-  if (cmd === "/exit") {
+  if (lowerCmd.startsWith("/cd ")) {
+    const newPath = cmd.replace(/^\/cd\s+/i, "").trim();
+    if (!newPath) {
+      console.log(chalk.yellow("  Please provide a path: /cd <path>\n"));
+      return {};
+    }
+    const path = require("node:path");
+    const fs = require("node:fs");
+    const resolvedPath = path.resolve(activeWorkspace, newPath);
+    if (!fs.existsSync(resolvedPath)) {
+      console.log(chalk.red(`  Directory not found: ${resolvedPath}\n`));
+      return {};
+    }
+    console.log(chalk.green(`  ✓ Changed workspace to: ${resolvedPath}\n`));
+    return { changeWorkspace: resolvedPath };
+  }
+
+  if (lowerCmd === "/exit") {
     console.log(chalk.dim("\nGoodbye.\n"));
     return { exit: true };
   }
 
-  if (cmd === "/clear") {
+  if (lowerCmd === "/clear") {
     memory.clear?.();
     console.log(INFO_STYLE("  Memory cleared.\n"));
     return {};
   }
 
-  if (cmd === "/undo") {
-    console.log(undoLast(config.defaultWorkspace));
+  if (lowerCmd === "/undo") {
+    console.log(undoLast(activeWorkspace));
     return {};
   }
 
-  if (cmd === "/history") {
+  if (lowerCmd === "/history") {
     console.log(getHistory());
     return {};
   }
 
-  if (cmd === "/status") {
+  if (lowerCmd === "/status") {
     const telegramStatus = isTelegramRunning()
       ? chalk.green("● running")
       : chalk.dim("○ stopped");
@@ -71,14 +90,14 @@ async function handleSlashCommand(input: string, config: SomaConfig): Promise<{ 
     console.log(`
 ${chalk.bold(agentName + " Status")}
   ${chalk.dim("Model")}      ${chalk.cyan(config.model)}
-  ${chalk.dim("Workspace")}  ${chalk.cyan(config.defaultWorkspace)}
+  ${chalk.dim("Workspace")}  ${chalk.cyan(activeWorkspace)}
   ${chalk.dim("Telegram")}   ${telegramStatus}
   ${chalk.dim("User")}       ${chalk.cyan(config.displayName)}
 `);
     return {};
   }
 
-  if (cmd === "/model") {
+  if (lowerCmd === "/model") {
     console.log(INFO_STYLE("  Opening model picker...\n"));
     const newModel = await resolveModel();
     setActiveModel(newModel);
@@ -86,7 +105,7 @@ ${chalk.bold(agentName + " Status")}
     return {};
   }
 
-  if (cmd === "/telegram") {
+  if (lowerCmd === "/telegram") {
     if (isTelegramRunning()) {
       const stop = await confirm({ message: "Telegram bot is running. Stop it?" });
       if (!isCancel(stop) && stop) {
@@ -113,9 +132,10 @@ ${chalk.bold(agentName + " Status")}
   return {};
 }
 
-export async function runArthurCli() {
+export async function runArthurCli(initialWorkspace?: string) {
   const config = (await getConfig()) as SomaConfig;
   const agentName = config.agentName || "Arthur";
+  let activeWorkspace = initialWorkspace || config.defaultWorkspace || process.cwd();
 
   console.log(ARTHUR_STYLE(
     `  ┌─────────────────────────────────────────┐\n` +
@@ -141,21 +161,25 @@ export async function runArthurCli() {
 
     // Handle slash commands
     if (raw.startsWith("/")) {
-      const result = await handleSlashCommand(raw, config);
+      const result = await handleSlashCommand(raw, config, activeWorkspace);
       if (result.exit) break;
+      if (result.changeWorkspace) {
+        activeWorkspace = result.changeWorkspace;
+      }
       continue;
     }
 
     // Normal task — run Arthur agent
-    await runArthurTask(raw, agentName);
+    await runArthurTask(raw, agentName, activeWorkspace);
   }
 }
 
-async function runArthurTask(goal: string, agentName: string) {
+async function runArthurTask(goal: string, agentName: string, activeWorkspace: string) {
   const context = memory.getAll();
   memory.add(`User task: ${goal}`, "event");
 
   const config = defaultAgentConfig();
+  config.codebasePath = activeWorkspace;
   const tracker = new ActionTracker();
   const executor = new ToolExecutor(tracker, config);
   const tools = createAgentTools(executor, memory);
@@ -187,7 +211,7 @@ async function runArthurTask(goal: string, agentName: string) {
 
   const agent = new ToolLoopAgent({
     model: getAgentModel(),
-    stopWhen: stepCountIs(40),
+    stopWhen: stepCountIs(10),
     instructions: [
       `You are ${agentName}, SomaFlow's autonomous coding agent.`,
       "Be concise, direct, and professional.",
@@ -238,7 +262,6 @@ async function runArthurTask(goal: string, agentName: string) {
   const MAX_RETRIES = 2;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     console.log(chalk.hex("#9b77e8").dim(`\n  [${agentName}] Auto-checking quality (pass ${attempt + 1}/${MAX_RETRIES})...`));
-    executor.runImmediateShell("bunx eslint --fix .");
     const eslintOut = executor.runImmediateShell("bunx eslint .");
     const tscOut = executor.runImmediateShell("bunx tsc --noEmit");
     const hasErrors = eslintOut.includes("error") || tscOut.includes("error TS");
@@ -252,14 +275,14 @@ async function runArthurTask(goal: string, agentName: string) {
     const fixExecutor = new ToolExecutor(fixTracker, config);
     const fixAgent = new ToolLoopAgent({
       model: getAgentModel(),
-      stopWhen: stepCountIs(20),
+      stopWhen: stepCountIs(5),
       instructions: [
         `You are ${agentName}, auto-fixing quality errors in SomaFlow.`,
         "Do NOT change logic or add features. ONLY fix TS/Lint errors.",
         `Workspace root: ${config.codebasePath}`,
         formatCompactRepoMap(),
         "All file mutations are staged until approval.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
       tools: createAgentTools(fixExecutor, memory),
     });
 

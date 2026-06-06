@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import path from "node:path";
+import * as path from "node:path";
 
 export interface GitResult {
   success: boolean;

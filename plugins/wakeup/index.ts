@@ -9,9 +9,9 @@ const WakeupPlugin: SomaPlugin = {
     description: "Boot Arthur — print banner, resolve model, and launch the agent.",
     registerCommands: (program: Command) => {
         program
-            .command("wakeup")
+            .command("wakeup [workspace]")
             .description("Wake Arthur up and start your coding session")
-            .action(async () => {
+            .action(async (workspace?: string) => {
                 const config = await getConfig();
                 await runWakeup({ savedModel: config?.model, displayName: config?.displayName, agentName: config?.agentName });
 
@@ -20,15 +20,17 @@ const WakeupPlugin: SomaPlugin = {
                     await startTelegramBot(config.telegram.botToken, config.telegram.ownerId);
                 }
 
-                if (config?.defaultWorkspace) {
+                const activeWorkspace = workspace || config?.defaultWorkspace || process.cwd();
+
+                if (activeWorkspace) {
                     const { startRepoWatcher } = await import("../../src/repomap/watcher");
                     const { repoMapStore } = await import("../../src/repomap/store");
-                    startRepoWatcher(config.defaultWorkspace);
-                    await repoMapStore.refresh(config.defaultWorkspace).catch(() => {});
+                    startRepoWatcher(activeWorkspace);
+                    await repoMapStore.refresh(activeWorkspace).catch(() => {});
                 }
 
                 const { runArthurCli } = await import("../../plugins/cli/arthur");
-                await runArthurCli();
+                await runArthurCli(activeWorkspace);
             });
     }
 };
