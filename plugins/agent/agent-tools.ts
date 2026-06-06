@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { ToolExecutor } from "./tool-executor";
 import type { MemoryStore } from "../../src/memory/store";
 import { createMemoryTools } from "../../src/memory/tools";
+import { repoMapStore } from "../../src/repomap/store";
+import { formatDetailedRepoMap } from "../../src/repomap/formatter";
 
 export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
   return {
@@ -173,29 +175,115 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
     }),
 
     fetch_url: tool({
-      description: "Fetch the content of a URL (HTTP GET or POST). Use this to read documentation pages, test API endpoints, or download text content.",
+      description: "Fetch the content of a URL and convert it to clean Markdown. Results are cached for 24 hours.",
       inputSchema: z.object({
         url: z.string().describe("The full URL to fetch"),
-        method: z.string().optional().default("GET").describe("HTTP method (GET or POST)"),
       }),
-      execute: async ({ url, method }) => executor.fetchUrl(url, method),
+      execute: async ({ url }) => executor.fetchUrl(url),
     }),
 
-    git_execute: tool({
-      description: "Execute a Git command. Use for read-only commands (status, log, diff, branch) to get immediate output, and mutating commands (commit, checkout, push) to queue for approval.",
+    fetch_docs: tool({
+      description: "Fetch documentation for an npm package or any URL. Converts to Markdown and caches for 24h. Always cite the source in your response.",
       inputSchema: z.object({
-        command: z.string().describe("The git command to run (e.g., 'git status', 'git commit -m \"msg\"')"),
+        packageOrUrl: z.string().describe("npm package name (e.g. 'zod') or full URL (e.g. 'https://zod.dev')"),
       }),
-      execute: async ({ command }) => {
-        if (!command.startsWith("git ")) throw new Error("Only git commands allowed.");
-        const isReadOnly = /^(git status|git log|git diff|git show|git branch)/.test(command);
-        if (isReadOnly) {
-          return executor.runImmediateShell(command);
-        } else {
-          return executor.queueShell(command);
-        }
+      execute: async ({ packageOrUrl }) => executor.fetchDocs(packageOrUrl),
+    }),
+
+    // ─── Git tools ──────────────────────────────────────────────────────────
+
+    git_status: tool({
+      description: "Get the current git status (staged, unstaged, untracked files). Immediate read-only.",
+      inputSchema: z.object({}),
+      execute: async () => executor.gitStatus(),
+    }),
+
+    git_diff: tool({
+      description: "Show the git diff for the entire workspace or a specific file. Immediate read-only.",
+      inputSchema: z.object({
+        file: z.string().optional().describe("Optional: specific file path to diff"),
+      }),
+      execute: async ({ file }) => executor.gitDiff(file),
+    }),
+
+    git_log: tool({
+      description: "Show the last N git commits as a one-line log. Immediate read-only.",
+      inputSchema: z.object({
+        n: z.number().int().min(1).max(50).optional().default(10).describe("Number of commits to show"),
+      }),
+      execute: async ({ n }) => executor.gitLog(n),
+    }),
+
+    git_commit: tool({
+      description: "Stage all changes and commit with a message. Queued for user approval.",
+      inputSchema: z.object({
+        message: z.string().describe("The commit message"),
+      }),
+      execute: async ({ message }) => executor.gitCommit(message),
+    }),
+
+    git_create_branch: tool({
+      description: "Create and switch to a new git branch. Queued for user approval. Blocked on protected branches (main, master).",
+      inputSchema: z.object({
+        name: z.string().describe("The new branch name"),
+      }),
+      execute: async ({ name }) => executor.gitCreateBranch(name),
+    }),
+
+    git_checkout: tool({
+      description: "Switch to an existing git branch. Queued for approval. Will refuse if working tree is dirty.",
+      inputSchema: z.object({
+        branch: z.string().describe("Branch name to check out"),
+      }),
+      execute: async ({ branch }) => executor.gitCheckout(branch),
+    }),
+
+    git_push: tool({
+      description: "Push the current branch to a remote. Queued for user approval.",
+      inputSchema: z.object({
+        remote: z.string().optional().default("origin").describe("Remote name (default: origin)"),
+        branch: z.string().optional().describe("Branch name (defaults to current branch)"),
+      }),
+      execute: async ({ remote, branch }) => executor.gitPush(remote, branch),
+    }),
+
+    git_stash: tool({
+      description: "Stash current working tree changes. Queued for user approval.",
+      inputSchema: z.object({
+        message: z.string().optional().describe("Optional stash message"),
+      }),
+      execute: async ({ message }) => executor.gitStash(message),
+    }),
+
+    // ─── Repo Map tools ─────────────────────────────────────────────────────
+
+    get_repo_map: tool({
+      description: "Get a detailed repo map listing all files and their exported symbols, classes, and functions. Use to understand project structure.",
+      inputSchema: z.object({
+        filter: z.string().optional().describe("Optional: comma-separated file paths or names to filter"),
+      }),
+      execute: async ({ filter }) => {
+        const files = filter ? filter.split(",").map((s) => s.trim()) : undefined;
+        return formatDetailedRepoMap(files);
       },
     }),
+
+    query_repo_map: tool({
+      description: "Search the repo index for a specific symbol name, file name, or keyword. Returns matching files and their symbols.",
+      inputSchema: z.object({
+        query: z.string().describe("Symbol or file name to search for"),
+      }),
+      execute: async ({ query }) => {
+        const matches = repoMapStore.query(query);
+        if (!matches.length) return `No matches found for: "${query}"\nTry get_repo_map to see all files.`;
+        return matches.map((f) => {
+          const syms = f.symbols.map((s) => `  - [${s.kind}] ${s.name} (line ${s.line})`).join("\n");
+          return `## ${f.path}\n${syms || "  (no symbols)"}`;
+        }).join("\n\n");
+      },
+    }),
+
+    // ─── Other tools ─────────────────────────────────────────────────────────
 
     run_typecheck: tool({
       description: "Run the TypeScript compiler (tsc --noEmit) to check for errors immediately. Use this to verify code before finishing.",
