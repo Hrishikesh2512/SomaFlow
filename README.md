@@ -1,106 +1,153 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=250&section=header&text=Hrishikesh%20Jha&fontSize=60&fontAlignY=40&desc=AI/ML%20Engineer%20•%20Human-Computer%20Interaction&descAlignY=60&descSize=20" width="100%"/>
-
-## whoami
-
-```yaml
-name: Hrishikesh Jha
-role: AI/ML Engineer
-obsessions:
-  - making machines that actually understand things
-  - terminals that don't suck
-  - memory. persistence. context. why is this still hard.
-currently: neck-deep in agents, vision systems, and things that shouldn't work but do
-email: jha.kharakh@gmail.com
-```
-
-## things i've built and refuse to stop working on
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <h3><a href="https://github.com/Hrishikesh2512/SomaFlow">🌊 SomaFlow</a></h3>
-      <p>Give it a task. It plans it, writes the code, reviews its own diff, auto-fixes type errors, then asks you to approve before touching anything. 4 agents, 25+ tools, runs in your terminal or as a Telegram bot. Built on Bun.</p>
-      <a href="https://github.com/Hrishikesh2512/SomaFlow"><img src="https://img.shields.io/badge/Repository-0D1117?style=for-the-badge&logo=github&logoColor=white" /></a>
-      <br/><br/>
-      <img src="https://img.shields.io/badge/Bun-f472b6?style=flat-square&logo=bun&logoColor=black" />
-      <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-      <img src="https://img.shields.io/badge/Multi--Agent-000000?style=flat-square&logo=openai&logoColor=white" />
-      <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=flat-square&logo=telegram&logoColor=white" />
-    </td>
-    <td width="50%" valign="top">
-      <h3><a href="https://github.com/Hrishikesh2512/AIX-Terminal">⚡ AIX-Term Pro</a></h3>
-      <p>Type what you want in plain English, get the shell command, see it run. Understands your current directory, session state, and won't execute anything dangerous without asking. Basically a sane interface for the terminal.</p>
-      <a href="https://github.com/Hrishikesh2512/AIX-Terminal"><img src="https://img.shields.io/badge/Repository-0D1117?style=for-the-badge&logo=github&logoColor=white" /></a>
-      <br/><br/>
-      <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-      <img src="https://img.shields.io/badge/Shell-4EAA25?style=flat-square&logo=gnu-bash&logoColor=white" />
-      <img src="https://img.shields.io/badge/LLMs-000000?style=flat-square&logo=openai&logoColor=white" />
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <h3><a href="https://github.com/Hrishikesh2512/Drishti">👁️ Drishti</a></h3>
-      <p>Real-time computer vision system that does more than detect objects: it tracks spatial relationships between them and infers what's actually happening in a scene. Point a camera at something, get structured understanding back, not just bounding boxes.</p>
-      <a href="https://github.com/Hrishikesh2512/Drishti"><img src="https://img.shields.io/badge/Repository-0D1117?style=for-the-badge&logo=github&logoColor=white" /></a>
-      <br/><br/>
-      <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" />
-      <img src="https://img.shields.io/badge/TensorFlow-FF6F00?style=flat-square&logo=tensorflow&logoColor=white" />
-      <img src="https://img.shields.io/badge/OpenCV-5C3EE8?style=flat-square&logo=opencv&logoColor=white" />
-    </td>
-    <td width="50%" valign="top">
-      <h3><a href="https://github.com/Hrishikesh2512/Smyrti">🧠 SMYRTI</a></h3>
-      <p>Persistent memory layer for AI systems. Stores context as a semantic graph so agents can query what they actually need across sessions: not grep through a chat log. Plug it in and your AI stops forgetting everything the moment a session ends.</p>
-      <a href="https://github.com/Hrishikesh2512/Smyrti"><img src="https://img.shields.io/badge/Repository-0D1117?style=for-the-badge&logo=github&logoColor=white" /></a>
-      <br/><br/>
-      <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
-      <img src="https://img.shields.io/badge/NLP-00a8af?style=flat-square&logo=awslambda&logoColor=white" />
-    </td>
-  </tr>
-</table>
-
-## the stack
-
-<p align="left">
-  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
-  <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" />
-  <img src="https://img.shields.io/badge/Bun-f472b6?style=for-the-badge&logo=bun&logoColor=black" />
-  <img src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black" />
-  <img src="https://img.shields.io/badge/Shell_Scripting-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white" />
-  <img src="https://img.shields.io/badge/TensorFlow-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white" />
-  <img src="https://img.shields.io/badge/OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white" />
-  <img src="https://img.shields.io/badge/Chrome_Extensions-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" />
-</p>
-
-## things i keep thinking about
-
-```
-  why do agents still feel like autocomplete with extra steps
-  memory is a harder problem than intelligence and nobody talks about it
-  the terminal is 50 years old and still the best dev tool ever made
-  perception ≠ detection. understanding ≠ classification.
-  most "AI products" are just APIs with nice fonts
-```
-
-## numbers
-
 <div align="center">
-  <img src="https://github-readme-streak-stats.herokuapp.com/?user=Hrishikesh2512&theme=tokyonight&hide_border=true&border_radius=0" alt="GitHub Streak" />
-</div>
-<br>
-<div align="center">
-  <img src="https://github-readme-activity-graph.vercel.app/graph?username=Hrishikesh2512&theme=tokyo-night&hide_border=true" alt="Activity Graph" width="100%" />
+
+# 🌊 SomaFlow
+
+**A state-of-the-art autonomous AI coding agent & orchestrator — built natively with Bun and TypeScript.**
+
+Run it in your terminal. Deploy it as a Telegram bot. Let it write, review, and auto-correct your code.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Built with Bun](https://img.shields.io/badge/runtime-Bun-f472b6?logo=bun)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)](https://www.typescriptlang.org/)
+
 </div>
 
-## find me
+---
 
-<p align="left">
-  <a href="https://github.com/Hrishikesh2512"><img src="https://img.shields.io/badge/GITHUB-100000?style=for-the-badge&logo=github&logoColor=white" /></a>
-  <a href="mailto:jha.kharakh@gmail.com"><img src="https://img.shields.io/badge/EMAIL-D14836?style=for-the-badge&logo=gmail&logoColor=white" /></a>
-  <a href="https://www.linkedin.com/in/hrishikesh-jha-957603220"><img src="https://img.shields.io/badge/LINKEDIN-0077B5?style=for-the-badge&logo=linkedin&logoColor=white" /></a>
-  <a href="https://instagram.com/hrishikeshjhaa"><img src="https://img.shields.io/badge/INSTAGRAM-E4405F?style=for-the-badge&logo=instagram&logoColor=white" /></a>
-  <a href="https://t.me/HrishikeshJha"><img src="https://img.shields.io/badge/TELEGRAM-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" /></a>
-  <a href="https://discordapp.com/users/gangsterhrishi25032"><img src="https://img.shields.io/badge/DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white" /></a>
-</p>
+## What is SomaFlow?
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=footer" width="100%"/>
+SomaFlow is a highly capable, multi-agent orchestrator designed to act as your personal pair programmer. It doesn't just generate code snippets — it can navigate your file system, stage atomic changes, perform semantic searches, run background tasks, and **auto-correct its own errors** using a multi-agent feedback loop.
+
+Built natively on [Bun](https://bun.sh) for sub-100ms cold starts, it comes with a beautiful Terminal UI (TUI) for local debugging and a Telegram mode for remote execution.
+
+---
+
+## 🔥 Key Features
+
+### 🤖 Multi-Agent Architecture
+Instead of relying on a single LLM call, SomaFlow delegates tasks:
+1. **Planner Agent:** Creates a markdown-based task checklist (`task.md`) and designs the architecture (`implementation_plan.md`).
+2. **Executor Agent:** Navigates the codebase and executes the plan using 25+ tools.
+3. **Reviewer Agent:** Critiques the Executor's staged changes via a unified diff before you ever approve them.
+4. **Auto-Fix Agent:** Steps in if type-checks or linting fail to automatically repair the code.
+
+### 🛠️ Massive Tool Suite (25+ Tools)
+- **Filesystem:** Read lines, edit, replace, delete, create files and folders.
+- **Search & AST:** Ripgrep-style semantic search, regex symbol search, and file listing.
+- **Git & Shell:** Read-only command execution, queued mutating commands, and background detached tasks.
+- **Context Management:** AI-powered file summarization and session memory compression to prevent token bloat.
+- **Verification:** Runs `bunx tsc --noEmit`, `eslint --fix`, and `bun test` immediately.
+
+### 🛡️ The Auto-Correction Loop
+SomaFlow won't blindly commit broken code. After staging changes:
+1. It runs `eslint --fix` quietly to repair style issues.
+2. It runs `tsc --noEmit` and grabs any ESLint / TypeScript errors.
+3. If errors exist, it spawns an **Auto-Fix Agent** up to 2 times to resolve them before prompting you.
+
+### 🖥️ Interactive Approval UI
+Before modifying your filesystem, SomaFlow stages its changes. You get a Git-style diff view in your terminal and a 2-3 sentence AI critique from the Reviewer Agent. You can choose to approve all, review one-by-one, or reject.
+
+---
+
+## Project Structure
+
+```
+SomaFlow/
+├── ai/             # Core LLM integration, token streaming, Vercel AI SDK
+├── memory/         # Persistent context, session memory, and AI summarization
+├── modes/          # Four behavioral modes
+│   ├── agent/      # The autonomous coding agent (Orchestrator, Executor, Tracker, Approval)
+│   ├── telegram/   # Telegram bot mode routing and handlers
+│   ├── plan/       # Specialized planning mode
+│   └── chat/       # Standard conversational mode
+├── tui/            # Terminal UI and Markdown rendering
+├── index.ts        # Entry point
+└── bun.lockb
+```
+
+---
+
+## Prerequisites
+
+- [Bun](https://bun.sh) `>= 1.0` installed
+- An API key from an LLM provider (OpenRouter, OpenAI, Anthropic, Gemini, etc.)
+- A Telegram Bot token from [@BotFather](https://t.me/botfather) *(only if deploying the bot)*
+
+---
+
+## Getting Started
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/Hrishikesh2512/SomaFlow.git
+cd SomaFlow
+bun install
+```
+
+### 2. Configure Environment
+
+On your first run, SomaFlow will guide you through an interactive onboarding wizard to configure your preferred model, API keys, and enable core plugins.
+
+```bash
+bun run index.ts
+```
+
+*(This will generate a `~/.somaflow.json` configuration file).*
+
+### 3. Usage
+
+After setup, run SomaFlow as a CLI:
+
+```bash
+# See all available plugins and commands
+bun run index.ts --help
+
+# Launch the autonomous coding agent
+bun run index.ts agent
+
+# Start standard chat mode
+bun run index.ts chat
+
+# Start the telegram bot background listener
+bun run index.ts telegram
+```
+
+---
+
+## 🧩 Plugin Ecosystem
+
+SomaFlow is fully extensible via its open plugin platform.
+
+### Installing Community Plugins
+```bash
+bun run install-plugin <git-repo-url>
+```
+
+### Creating Your Own Plugin
+```bash
+bun run create-plugin
+```
+This will scaffold a new plugin in the `./plugins/` directory.
+
+---
+
+## Contributing
+
+SomaFlow is highly modular. You can easily add new tools to the Agent plugin or create entirely new plugins.
+
+1. Fork the repo (`git checkout -b feat/my-change`)
+2. Make changes
+3. Open a PR
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details. Free to use, modify, and distribute.
+
+<div align="center">
+  <sub>Built with 🌊 by the SomaFlow contributors</sub>
+</div>
