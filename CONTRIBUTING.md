@@ -31,7 +31,7 @@ cd SomaFlow
 3. Add the upstream remote:
 
 ```bash
-git remote add upstream https://github.com/your-username/SomaFlow.git
+git remote add upstream https://github.com/Hrishikesh2512/SomaFlow.git
 ```
 
 4. Install dependencies:
