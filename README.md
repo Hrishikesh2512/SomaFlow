@@ -1,153 +1,171 @@
 <div align="center">
 
-# 🌊 SomaFlow
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f0f23,50:1a1a3e,100:0d1b2a&height=200&section=header&text=SomaFlow&fontSize=72&fontColor=f472b6&fontAlignY=45&desc=autonomous%20ai%20coding%20agent%20%26%20orchestrator&descSize=18&descAlignY=68&descColor=8892b0" width="100%"/>
 
-**A state-of-the-art autonomous AI coding agent & orchestrator — built natively with Bun and TypeScript.**
+<br/>
 
-Run it in your terminal. Deploy it as a Telegram bot. Let it write, review, and auto-correct your code.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Built with Bun](https://img.shields.io/badge/runtime-Bun-f472b6?logo=bun)](https://bun.sh)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-f472b6?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Built with Bun](https://img.shields.io/badge/runtime-Bun-f472b6?style=flat-square&logo=bun&logoColor=black)](https://bun.sh)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![Agents](https://img.shields.io/badge/agents-4-64ffda?style=flat-square)]()
+[![Tools](https://img.shields.io/badge/tools-25+-64ffda?style=flat-square)]()
 
 </div>
 
----
-
-## What is SomaFlow?
-
-SomaFlow is a highly capable, multi-agent orchestrator designed to act as your personal pair programmer. It doesn't just generate code snippets — it can navigate your file system, stage atomic changes, perform semantic searches, run background tasks, and **auto-correct its own errors** using a multi-agent feedback loop.
-
-Built natively on [Bun](https://bun.sh) for sub-100ms cold starts, it comes with a beautiful Terminal UI (TUI) for local debugging and a Telegram mode for remote execution.
-
----
-
-## 🔥 Key Features
-
-### 🤖 Multi-Agent Architecture
-Instead of relying on a single LLM call, SomaFlow delegates tasks:
-1. **Planner Agent:** Creates a markdown-based task checklist (`task.md`) and designs the architecture (`implementation_plan.md`).
-2. **Executor Agent:** Navigates the codebase and executes the plan using 25+ tools.
-3. **Reviewer Agent:** Critiques the Executor's staged changes via a unified diff before you ever approve them.
-4. **Auto-Fix Agent:** Steps in if type-checks or linting fail to automatically repair the code.
-
-### 🛠️ Massive Tool Suite (25+ Tools)
-- **Filesystem:** Read lines, edit, replace, delete, create files and folders.
-- **Search & AST:** Ripgrep-style semantic search, regex symbol search, and file listing.
-- **Git & Shell:** Read-only command execution, queued mutating commands, and background detached tasks.
-- **Context Management:** AI-powered file summarization and session memory compression to prevent token bloat.
-- **Verification:** Runs `bunx tsc --noEmit`, `eslint --fix`, and `bun test` immediately.
-
-### 🛡️ The Auto-Correction Loop
-SomaFlow won't blindly commit broken code. After staging changes:
-1. It runs `eslint --fix` quietly to repair style issues.
-2. It runs `tsc --noEmit` and grabs any ESLint / TypeScript errors.
-3. If errors exist, it spawns an **Auto-Fix Agent** up to 2 times to resolve them before prompting you.
-
-### 🖥️ Interactive Approval UI
-Before modifying your filesystem, SomaFlow stages its changes. You get a Git-style diff view in your terminal and a 2-3 sentence AI critique from the Reviewer Agent. You can choose to approve all, review one-by-one, or reject.
-
----
-
-## Project Structure
+<br/>
 
 ```
-SomaFlow/
-├── ai/             # Core LLM integration, token streaming, Vercel AI SDK
-├── memory/         # Persistent context, session memory, and AI summarization
-├── modes/          # Four behavioral modes
-│   ├── agent/      # The autonomous coding agent (Orchestrator, Executor, Tracker, Approval)
-│   ├── telegram/   # Telegram bot mode routing and handlers
-│   ├── plan/       # Specialized planning mode
-│   └── chat/       # Standard conversational mode
-├── tui/            # Terminal UI and Markdown rendering
-├── index.ts        # Entry point
-└── bun.lockb
+give it a task.
+it plans → codes → reviews its own diff → fixes type errors → asks you to approve.
+nothing touches your filesystem until you say so.
 ```
 
----
+<br/>
 
-## Prerequisites
+<div align="center">
+  <img src="assets/splash.png" width="75%" alt="SomaFlow TUI splash screen" />
+</div>
 
-- [Bun](https://bun.sh) `>= 1.0` installed
-- An API key from an LLM provider (OpenRouter, OpenAI, Anthropic, Gemini, etc.)
-- A Telegram Bot token from [@BotFather](https://t.me/botfather) *(only if deploying the bot)*
+<br/>
 
----
+## what it actually does
 
-## Getting Started
+SomaFlow is a 4-agent pipeline that takes a task description and turns it into reviewed, linted, type-checked code — staged for your approval before anything is written to disk. Not a chatbot. Not autocomplete. An actual agent loop that knows when it's wrong and fixes itself.
 
-### 1. Clone & Install
+Runs as a Terminal UI locally or a Telegram bot remotely. Cold starts in under 100ms on Bun.
+
+<br/>
+
+## the pipeline
+
+```
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌─────────────┐
+│   Planner   │────▶│   Executor   │────▶│   Reviewer   │────▶│  Auto-Fix   │
+│             │     │              │     │              │     │             │
+│ task.md     │     │ 25+ tools    │     │ reads diff   │     │ tsc + lint  │
+│ impl plan   │     │ fs/git/shell │     │ critiques it │     │ up to 2x    │
+└─────────────┘     └──────────────┘     └──────────────┘     └─────────────┘
+                                                                      │
+                                                              ┌───────▼───────┐
+                                                              │ approval UI   │
+                                                              │ git-style diff│
+                                                              │ you decide    │
+                                                              └───────────────┘
+```
+
+<br/>
+
+**agent in action — planning a task in real time:**
+
+<div align="center">
+  <img src="assets/agent-planning.png" width="90%" alt="SomaFlow agent planning output" />
+</div>
+
+<br/>
+
+## tool suite
+
+| category | tools |
+|----------|-------|
+| filesystem | read, edit, replace, delete, create files & folders |
+| search & AST | ripgrep-style semantic search, regex symbol search, file listing |
+| git & shell | read-only exec, queued mutating commands, background detached tasks |
+| context | AI file summarization, session memory compression |
+| verification | `bunx tsc --noEmit`, `eslint --fix`, `bun test` |
+
+<br/>
+
+## auto-correction loop
+
+before you ever see the output:
+
+```
+staged changes
+    │
+    ├── eslint --fix          (style, silently)
+    ├── tsc --noEmit          (catch type errors)
+    │
+    └── errors found?
+            │
+            ├── yes → spawn Auto-Fix Agent (max 2 attempts)
+            └── no  → surface diff for approval
+```
+
+it does not ask you to fix its mistakes. it tries to fix them itself first.
+
+<br/>
+
+## getting started
+
+**prerequisites:** Bun `>= 1.0`, an LLM provider API key (OpenRouter, OpenAI, Anthropic, Gemini)
 
 ```bash
 git clone https://github.com/Hrishikesh2512/SomaFlow.git
 cd SomaFlow
 bun install
+bun run index.ts        # onboarding wizard runs on first launch
 ```
 
-### 2. Configure Environment
-
-On your first run, SomaFlow will guide you through an interactive onboarding wizard to configure your preferred model, API keys, and enable core plugins.
-
-```bash
-bun run index.ts
-```
-
-*(This will generate a `~/.somaflow.json` configuration file).*
-
-### 3. Usage
-
-After setup, run SomaFlow as a CLI:
-
-```bash
-# See all available plugins and commands
-bun run index.ts --help
-
-# Launch the autonomous coding agent
-bun run index.ts agent
-
-# Start standard chat mode
-bun run index.ts chat
-
-# Start the telegram bot background listener
-bun run index.ts telegram
-```
-
----
-
-## 🧩 Plugin Ecosystem
-
-SomaFlow is fully extensible via its open plugin platform.
-
-### Installing Community Plugins
-```bash
-bun run install-plugin <git-repo-url>
-```
-
-### Creating Your Own Plugin
-```bash
-bun run create-plugin
-```
-This will scaffold a new plugin in the `./plugins/` directory.
-
----
-
-## Contributing
-
-SomaFlow is highly modular. You can easily add new tools to the Agent plugin or create entirely new plugins.
-
-1. Fork the repo (`git checkout -b feat/my-change`)
-2. Make changes
-3. Open a PR
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE) for details. Free to use, modify, and distribute.
+first run drops you into an interactive setup — name your agent, pick your model, configure Telegram if you want it:
 
 <div align="center">
-  <sub>Built with 🌊 by the SomaFlow contributors</sub>
+  <img src="assets/onboarding.png" width="85%" alt="SomaFlow first-time setup wizard" />
+</div>
+
+<br/>
+
+generates `~/.somaflow.json` with your preferences. after that:
+
+```bash
+bun run index.ts agent      # autonomous coding agent
+bun run index.ts chat       # standard chat mode
+bun run index.ts telegram   # start telegram bot listener
+bun run index.ts --help     # all commands
+```
+
+<br/>
+
+## project structure
+
+```
+SomaFlow/
+├── ai/             LLM integration, token streaming, Vercel AI SDK
+├── memory/         persistent context, session memory, summarization
+├── modes/
+│   ├── agent/      orchestrator, executor, tracker, approval UI
+│   ├── telegram/   bot routing and handlers
+│   ├── plan/       planning mode
+│   └── chat/       standard conversational mode
+├── tui/            terminal UI, markdown rendering
+└── index.ts
+```
+
+<br/>
+
+## plugin ecosystem
+
+```bash
+bun run install-plugin <git-repo-url>   # install community plugin
+bun run create-plugin                   # scaffold your own
+```
+
+plugins live in `./plugins/`. fully modular — add tools to the agent or build new modes entirely.
+
+<br/>
+
+## contributing
+
+fork → `git checkout -b feat/my-change` → PR. see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+<br/>
+
+## license
+
+MIT. use it, fork it, ship it.
+
+<br/>
+
+<div align="center">
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1b2a,50:1a1a3e,100:0f0f23&height=100&section=footer" width="100%"/>
+<sub>built with 🌊 by the SomaFlow contributors</sub>
 </div>
