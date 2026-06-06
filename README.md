@@ -1,171 +1,111 @@
-<div align="center">
+# SomaFlow (Arthur)
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f0f23,50:1a1a3e,100:0d1b2a&height=200&section=header&text=SomaFlow&fontSize=72&fontColor=f472b6&fontAlignY=45&desc=autonomous%20ai%20coding%20agent%20%26%20orchestrator&descSize=18&descAlignY=68&descColor=8892b0" width="100%"/>
+SomaFlow is an extensible, autonomous AI coding platform designed to supercharge your development workflow. At its core runs **Arthur**, an intelligent AI agent capable of planning, executing terminal commands, editing code, and auto-fixing errors — all under your supervision.
 
-<br/>
+Built completely around a modular **Plugin Engine**, SomaFlow lets you customize your agent, communicate via a beautiful Terminal UI, or even chat with Arthur from your phone via Telegram.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-f472b6?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Built with Bun](https://img.shields.io/badge/runtime-Bun-f472b6?style=flat-square&logo=bun&logoColor=black)](https://bun.sh)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
-[![Agents](https://img.shields.io/badge/agents-4-64ffda?style=flat-square)]()
-[![Tools](https://img.shields.io/badge/tools-25+-64ffda?style=flat-square)]()
+---
 
-</div>
+## 🌟 Key Features
 
-<br/>
+- **Autonomous Agent (Arthur)**: Give Arthur a goal, and he will write a plan, explore your codebase, and execute changes. 
+- **User Approval Flow**: Safety first. Arthur stages all file modifications and terminal commands for your explicit approval before executing them.
+- **Smart Auto-Fixing**: After completing a task, Arthur automatically runs `eslint` and `tsc` on your codebase. If he breaks anything, he spins up an auto-fix loop to resolve the errors before handing control back to you.
+- **Multi-Provider Support**: Natively supports **OpenRouter**, **OpenAI**, **Anthropic**, and **Google Gemini**. You can also fall back to local offline models via **Ollama**.
+- **Telegram Bot Integration**: Start Arthur in the background and chat with your codebase on the go via Telegram.
+- **Modular Plugin System**: Every feature (the CLI, the Telegram bot, the Agent itself) is a plugin. You can easily write and install new plugins to expand Arthur's capabilities.
+- **Interactive CLI & Slash Commands**: Change models on the fly with `/model`, toggle Telegram with `/telegram`, check agent status with `/status`, and clear memory with `/clear`.
 
-```
-give it a task.
-it plans → codes → reviews its own diff → fixes type errors → asks you to approve.
-nothing touches your filesystem until you say so.
-```
+---
 
-<br/>
+## 📂 Architecture & Project Structure
 
-<div align="center">
-  <img src="assets/splash.png" width="75%" alt="SomaFlow TUI splash screen" />
-</div>
+The project has recently undergone a major infrastructure redesign, moving to a highly modular plugin-based architecture.
 
-<br/>
-
-## what it actually does
-
-SomaFlow is a 4-agent pipeline that takes a task description and turns it into reviewed, linted, type-checked code — staged for your approval before anything is written to disk. Not a chatbot. Not autocomplete. An actual agent loop that knows when it's wrong and fixes itself.
-
-Runs as a Terminal UI locally or a Telegram bot remotely. Cold starts in under 100ms on Bun.
-
-<br/>
-
-## the pipeline
-
-```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Planner   │────▶│   Executor   │────▶│   Reviewer   │────▶│  Auto-Fix   │
-│             │     │              │     │              │     │             │
-│ task.md     │     │ 25+ tools    │     │ reads diff   │     │ tsc + lint  │
-│ impl plan   │     │ fs/git/shell │     │ critiques it │     │ up to 2x    │
-└─────────────┘     └──────────────┘     └──────────────┘     └─────────────┘
-                                                                      │
-                                                              ┌───────▼───────┐
-                                                              │ approval UI   │
-                                                              │ git-style diff│
-                                                              │ you decide    │
-                                                              └───────────────┘
+```text
+SomaFlow/
+├── src/
+│   ├── ai/            # Multi-provider model resolution & Vercel AI SDK wrappers
+│   ├── core/          # Plugin Manager engine & Smart Onboarding logic
+│   ├── memory/        # Short-term/long-term memory store for the agent
+│   └── tui/           # Terminal UI utilities and Markdown rendering
+├── plugins/           # Core features built as independent plugins
+│   ├── agent/         # The Arthur AI (ToolExecutor, ActionTracker, Prompts)
+│   ├── cli/           # The interactive terminal shell & Slash Commands
+│   ├── telegram/      # Telegram background service
+│   └── wakeup/        # Boot sequence, banner, and auto-start logic
+├── scripts/           # Dev tools (`create-plugin`, `install-plugin`)
+└── index.ts           # Main executable entry point
 ```
 
-<br/>
+---
 
-**agent in action — planning a task in real time:**
+## 🚀 Getting Started
 
-<div align="center">
-  <img src="assets/agent-planning.png" width="90%" alt="SomaFlow agent planning output" />
-</div>
+### 1. Prerequisites
+- **[Bun](https://bun.sh/)** installed on your system.
+- API Keys for your preferred LLM provider (OpenRouter, OpenAI, Anthropic, or Google) OR **Ollama** installed for local models.
 
-<br/>
-
-## tool suite
-
-| category | tools |
-|----------|-------|
-| filesystem | read, edit, replace, delete, create files & folders |
-| search & AST | ripgrep-style semantic search, regex symbol search, file listing |
-| git & shell | read-only exec, queued mutating commands, background detached tasks |
-| context | AI file summarization, session memory compression |
-| verification | `bunx tsc --noEmit`, `eslint --fix`, `bun test` |
-
-<br/>
-
-## auto-correction loop
-
-before you ever see the output:
-
-```
-staged changes
-    │
-    ├── eslint --fix          (style, silently)
-    ├── tsc --noEmit          (catch type errors)
-    │
-    └── errors found?
-            │
-            ├── yes → spawn Auto-Fix Agent (max 2 attempts)
-            └── no  → surface diff for approval
-```
-
-it does not ask you to fix its mistakes. it tries to fix them itself first.
-
-<br/>
-
-## getting started
-
-**prerequisites:** Bun `>= 1.0`, an LLM provider API key (OpenRouter, OpenAI, Anthropic, Gemini)
-
+### 2. Clone & Install
 ```bash
 git clone https://github.com/Hrishikesh2512/SomaFlow.git
 cd SomaFlow
 bun install
-bun run index.ts        # onboarding wizard runs on first launch
 ```
 
-first run drops you into an interactive setup — name your agent, pick your model, configure Telegram if you want it:
+### 3. Wake Up Arthur
+```bash
+bun run index.ts wakeup
+# or if linked globally:
+somaflow wakeup
+```
 
-<div align="center">
-  <img src="assets/onboarding.png" width="85%" alt="SomaFlow first-time setup wizard" />
-</div>
+The very first time you boot SomaFlow, you will be greeted by the **Smart Onboarding Flow**:
+1. Name your agent (Default: Arthur).
+2. Tell Arthur what to call you.
+3. Select which API providers you have keys for using an interactive checkbox menu.
+4. Set your default model.
+5. (Optional) Provide your Telegram Bot credentials to enable background Telegram access.
 
-<br/>
+---
 
-generates `~/.somaflow.json` with your preferences. after that:
+## 💻 Usage
+
+Once Arthur is awake, you are dropped into the interactive command loop. 
+
+**Normal Tasks:**
+Just type what you want to do:
+> `Arthur → Refactor the user authentication logic in src/auth.ts to use JWTs.`
+Arthur will generate a plan, execute it, and ask for your approval.
+
+**Slash Commands:**
+- `/model` - Interactively switch your active AI model (e.g., jump from Claude to GPT-4o).
+- `/telegram` - Start or stop the Telegram background bot.
+- `/status` - View current active model, user info, and workspace directory.
+- `/clear` - Wipe Arthur's short-term context memory.
+- `/help` - View available commands.
+- `/exit` - Safely shut down SomaFlow.
+
+---
+
+## 🔌 Writing Plugins
+
+SomaFlow is built to be extended. You can scaffold a new plugin instantly using the built-in script:
 
 ```bash
-bun run index.ts agent      # autonomous coding agent
-bun run index.ts chat       # standard chat mode
-bun run index.ts telegram   # start telegram bot listener
-bun run index.ts --help     # all commands
+bun run create-plugin my-plugin
 ```
 
-<br/>
-
-## project structure
-
-```
-SomaFlow/
-├── ai/             LLM integration, token streaming, Vercel AI SDK
-├── memory/         persistent context, session memory, summarization
-├── modes/
-│   ├── agent/      orchestrator, executor, tracker, approval UI
-│   ├── telegram/   bot routing and handlers
-│   ├── plan/       planning mode
-│   └── chat/       standard conversational mode
-├── tui/            terminal UI, markdown rendering
-└── index.ts
-```
-
-<br/>
-
-## plugin ecosystem
+This will create a new directory in `plugins/my-plugin` with a boilerplate structure. Once you are done building your plugin, enable it by running:
 
 ```bash
-bun run install-plugin <git-repo-url>   # install community plugin
-bun run create-plugin                   # scaffold your own
+bun run install-plugin my-plugin
 ```
 
-plugins live in `./plugins/`. fully modular — add tools to the agent or build new modes entirely.
+---
 
-<br/>
-
-## contributing
-
-fork → `git checkout -b feat/my-change` → PR. see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-<br/>
-
-## license
-
-MIT. use it, fork it, ship it.
-
-<br/>
-
-<div align="center">
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1b2a,50:1a1a3e,100:0f0f23&height=100&section=footer" width="100%"/>
-<sub>built with 🌊 by the SomaFlow contributors</sub>
-</div>
+## 🛠️ Built With
+- **[Bun](https://bun.sh/)** - Extremely fast JavaScript runtime.
+- **[Vercel AI SDK](https://sdk.vercel.ai/docs)** - Unified LLM interface.
+- **[Clack](https://clack.cc/)** - Beautiful, effortless terminal prompts.
+- **[Telegraf](https://telegraf.js.org/)** - Telegram bot framework.
