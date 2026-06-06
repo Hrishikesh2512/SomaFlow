@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f0f23,50:1a1a3e,100:0d1b2a&height=200&section=header&text=SomaFlow&fontSize=72&fontColor=f472b6&fontAlignY=45&desc=autonomous%20ai%20coding%20agent%20%26%20orchestrator&descSize=18&descAlignY=68&descColor=8892b0" width="100%"/>
+<img src="assets/splash.png" width="80%" alt="SomaFlow" />
 
-<br/>
+<br/><br/>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-f472b6?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Built with Bun](https://img.shields.io/badge/runtime-Bun-f472b6?style=flat-square&logo=bun&logoColor=black)](https://bun.sh)
@@ -22,15 +22,9 @@ nothing touches your filesystem until you say so.
 
 <br/>
 
-<div align="center">
-  <img src="assets/splash.png" width="75%" alt="SomaFlow TUI splash screen" />
-</div>
-
-<br/>
-
 ## what it actually does
 
-SomaFlow is a 4-agent pipeline that takes a task description and turns it into reviewed, linted, type-checked code — staged for your approval before anything is written to disk. Not a chatbot. Not autocomplete. An actual agent loop that knows when it's wrong and fixes itself.
+SomaFlow is a 4-agent pipeline that takes a task description and turns it into reviewed, linted, type-checked code: staged for your approval before anything is written to disk. Not a chatbot. Not autocomplete. An actual agent loop that knows when it's wrong and fixes itself.
 
 Runs as a Terminal UI locally or a Telegram bot remotely. Cold starts in under 100ms on Bun.
 
@@ -55,7 +49,7 @@ Runs as a Terminal UI locally or a Telegram bot remotely. Cold starts in under 1
 
 <br/>
 
-**agent in action — planning a task in real time:**
+**agent in action: planning a task in real time:**
 
 <div align="center">
   <img src="assets/agent-planning.png" width="90%" alt="SomaFlow agent planning output" />
@@ -106,7 +100,7 @@ bun install
 bun run index.ts        # onboarding wizard runs on first launch
 ```
 
-first run drops you into an interactive setup — name your agent, pick your model, configure Telegram if you want it:
+first run drops you into an interactive setup: name your agent, pick your model, configure Telegram if you want it:
 
 <div align="center">
   <img src="assets/onboarding.png" width="85%" alt="SomaFlow first-time setup wizard" />
@@ -149,7 +143,7 @@ bun run install-plugin <git-repo-url>   # install community plugin
 bun run create-plugin                   # scaffold your own
 ```
 
-plugins live in `./plugins/`. fully modular — add tools to the agent or build new modes entirely.
+plugins live in `./plugins/`. fully modular: add tools to the agent or build new modes entirely.
 
 <br/>
 
@@ -166,6 +160,5 @@ MIT. use it, fork it, ship it.
 <br/>
 
 <div align="center">
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1b2a,50:1a1a3e,100:0f0f23&height=100&section=footer" width="100%"/>
-<sub>built with 🌊 by the SomaFlow contributors</sub>
+  <sub>built with 🌊 by the SomaFlow contributors</sub>
 </div>
