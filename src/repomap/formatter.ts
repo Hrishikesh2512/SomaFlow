@@ -1,4 +1,4 @@
-import type { RepoIndex, RepoFileEntry } from "./indexer";
+import type { RepoFileEntry } from "./indexer";
 import { repoMapStore } from "./store";
 
 /**

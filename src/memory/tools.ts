@@ -1,4 +1,4 @@
-import { tool, generateText } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
 import type { MemoryStore } from "./store";
 import { randomUUID } from "crypto";

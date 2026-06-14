@@ -65,7 +65,6 @@ export function isMutationType(t: ActionType): boolean {
     t === 'file_modify' ||
     t === 'file_delete' ||
     t === 'folder_create' ||
-    t === 'tool_execute' ||
-    t === 'ask_user'
+    t === 'tool_execute'
   );
 }

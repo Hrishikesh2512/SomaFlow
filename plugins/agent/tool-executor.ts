@@ -3,27 +3,18 @@ import path from "node:path";
 import { homedir } from "node:os";
 import { spawnSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { isCancel, text } from "@clack/prompts";
 import type {AgentConfig, ActionLog} from './types';
 import{ActionTracker} from './action-tracker';
-import { MemoryStore } from "../../src/memory/store";
-import { GitClient, getGitRoot } from "../../src/git/client";
+import { applyEdits } from "./edit-engine";
+import type { FileEdit } from "./edit-engine";
+import { CodeIntel } from "../../src/intel/code-intel";
+import type { OverlayAccess } from "../../src/intel/code-intel";
+import { GitClient } from "../../src/git/client";
 import { guardCheckout, guardPush, guardCommit, guardDestructive } from "../../src/git/guards";
 import { takeSnapshot } from "../../src/history/index";
 import { createSearchProvider, formatSearchResults } from "../../src/web/search";
 import { fetchPageAsMarkdown, npmDocsUrl } from "../../src/web/fetcher";
-
-const memory = new MemoryStore();
-
-export function executeTool(toolName: string, args: any) {
-  if (toolName === "web_search") {
-    const query = args.query;
-    
-    memory.add(`Used tool: web_search for ${query}`, "event");
-  }
-}
-
-
-
 
 
 const TEXT_EXT = new Set([
@@ -108,15 +99,13 @@ export class ToolExecutor{
 
   readFile(rel: string): string {
     this.assertNotExcluded(rel, "read_file");
-    const abs = this.resolveSafe(rel);
-    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+    const text = this.getEffectiveText(rel);
+    if (text === undefined) {
       throw new Error(`File not found: ${rel}`);
     }
-    const st = fs.statSync(abs);
-    if (st.size > this.config.maxFileSizeToRead) {
+    if (new TextEncoder().encode(text).length > this.config.maxFileSizeToRead) {
       throw new Error(`File too large: ${rel}`);
     }
-    const text = fs.readFileSync(abs, "utf8");
     this.tracker.log({
       type: "code_analysis",
       path: this.norm(rel),
@@ -164,11 +153,10 @@ export class ToolExecutor{
 
   readFileLines(rel: string, startLine: number, endLine: number): string {
     this.assertNotExcluded(rel, "read_file_lines");
-    const abs = this.resolveSafe(rel);
-    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+    const text = this.getEffectiveText(rel);
+    if (text === undefined) {
       throw new Error(`File not found: ${rel}`);
     }
-    const text = fs.readFileSync(abs, "utf8");
     const allLines = text.split("\n");
     const total = allLines.length;
     const s = Math.max(1, startLine);
@@ -227,34 +215,49 @@ export class ToolExecutor{
     return `Staged update: ${key}`;
   }
 
-  replaceInFile(rel: string, targetContent: string, replacementContent: string): string {
+  replaceInFile(
+    rel: string,
+    targetContent: string,
+    replacementContent: string,
+    replaceAll = false,
+  ): string {
+    return this.editFile(rel, [
+      { oldText: targetContent, newText: replacementContent, replaceAll },
+    ]);
+  }
+
+  /**
+   * Apply one or more find/replace edits to a file atomically, using the tiered
+   * edit engine (exact match, then whitespace/indentation-flexible fallback).
+   */
+  editFile(rel: string, edits: FileEdit[]): string {
     if (!this.config.tools.allowFileModification)
       throw new Error("File modification disabled");
-    this.assertNotExcluded(rel, "replace_in_file");
+    this.assertNotExcluded(rel, "edit_file");
     const before = this.getEffectiveText(rel);
     if (before === undefined)
-      throw new Error(`replace_in_file: file not found: ${rel}`);
-    
-    if (!before.includes(targetContent)) {
-      throw new Error(`replace_in_file: target content not found in file ${rel}`);
+      throw new Error(`edit_file: file not found: ${rel}`);
+
+    const result = applyEdits(before, edits);
+    if (!result.ok || result.content === undefined) {
+      throw new Error(`edit_file (${rel}): ${result.error}`);
     }
-    
-    // Check if there are multiple occurrences. We'll only replace the first one or throw if we want to be strict, but standard simple replace replaces the first instance. Let's use split/join to replace all occurrences for now, or just the first. Let's just do a simple string replace (first occurrence) as it's standard, but since this is an agent, replacing first can be error prone if multiple match. Let's enforce it matches exactly once.
-    const count = before.split(targetContent).length - 1;
-    if (count > 1) {
-      throw new Error(`replace_in_file: target content occurs ${count} times in file ${rel}. Make the target content more specific.`);
+    if (result.content === before) {
+      throw new Error(`edit_file (${rel}): edits produced no change`);
     }
 
-    const after = before.replace(targetContent, replacementContent);
+    const after = result.content;
     const key = this.norm(rel);
     this.overlay.set(key, after);
+    const snap = takeSnapshot(this.config.codebasePath, rel, after, `edit_file: ${rel}`);
+    const usedFuzzy = result.strategies?.includes("whitespace");
     this.tracker.log({
       type: "file_modify",
       path: key,
-      details: { before, after },
+      details: { before, after, snapshotId: snap.id },
       status: "pending",
     });
-    return `Staged replacement in: ${key}`;
+    return `Staged ${edits.length} edit(s) in: ${key}${usedFuzzy ? " (whitespace-matched)" : ""}`;
   }
 
   deleteFile(rel: string): string {
@@ -389,6 +392,75 @@ export class ToolExecutor{
     return out || "(no matches)";
   }
 
+  // ─── Semantic code intelligence (TypeScript LanguageService) ──────────────────
+
+  private intel?: CodeIntel;
+
+  private absToKey(abs: string): string | undefined {
+    const rel = path.relative(this.config.codebasePath, abs);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+    return this.norm(rel);
+  }
+
+  private ensureIntel(): CodeIntel {
+    if (!this.intel) {
+      const overlay: OverlayAccess = {
+        get: (abs) => {
+          const key = this.absToKey(abs);
+          if (key === undefined || this.deleted.has(key)) return undefined;
+          return this.overlay.get(key);
+        },
+        isDeleted: (abs) => {
+          const key = this.absToKey(abs);
+          return key !== undefined && this.deleted.has(key);
+        },
+        list: () =>
+          [...this.overlay.keys()].map((k) => path.resolve(this.config.codebasePath, k)),
+      };
+      this.intel = new CodeIntel(this.config.codebasePath, overlay);
+    }
+    return this.intel;
+  }
+
+  private logIntel(toolName: string, command: string, after: string): string {
+    this.tracker.log({
+      type: "code_analysis",
+      path: "intel",
+      details: { after, toolName, command },
+      status: "executed",
+    });
+    return after;
+  }
+
+  findDefinition(symbol: string, fromFile?: string): string {
+    return this.logIntel("find_definition", symbol, this.ensureIntel().findDefinition(symbol, fromFile));
+  }
+
+  findReferences(symbol: string, fromFile?: string): string {
+    return this.logIntel("find_references", symbol, this.ensureIntel().findReferences(symbol, fromFile));
+  }
+
+  getTypeInfo(symbol: string, fromFile?: string): string {
+    return this.logIntel("get_type", symbol, this.ensureIntel().getType(symbol, fromFile));
+  }
+
+  getDiagnostics(file?: string): string {
+    return this.logIntel("get_diagnostics", file ?? "(workspace)", this.ensureIntel().getDiagnostics(file));
+  }
+
+  /** Semantic symbol search via the LanguageService, falling back to regex. */
+  searchSymbolSemantic(symbolName: string): string {
+    try {
+      const out = this.ensureIntel().searchSymbol(symbolName);
+      if (!out.startsWith("No symbol named")) {
+        return this.logIntel("search_symbol", symbolName, out);
+      }
+    } catch {
+      /* fall through to regex */
+    }
+    return this.searchSymbol(symbolName);
+  }
+
   searchSymbol(symbolName: string): string {
     const rootAbs = this.resolveSafe(".");
     const results: string[] = [];
@@ -409,7 +481,7 @@ export class ToolExecutor{
           walk(full);
         } else if (isProbablyTextFile(full)) {
           const text = fs.readFileSync(full, "utf8");
-          const lines = text.split("\\n");
+          const lines = text.split("\n");
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             if (line && regexes.some(r => r.test(line))) {
@@ -422,7 +494,7 @@ export class ToolExecutor{
 
     walk(rootAbs);
 
-    const out = results.join("\\n");
+    const out = results.join("\n");
     this.tracker.log({
       type: "code_analysis",
       path: "symbol_search",
@@ -529,14 +601,23 @@ export class ToolExecutor{
     return `Shell queued: ${command}`;
   }
 
-  askUser(question: string): string {
+  async askUser(question: string): Promise<string> {
+    const answer = await text({
+      message: question,
+      placeholder: "Type your answer (or press Enter to skip)...",
+    });
+
+    const reply = isCancel(answer) || !answer?.trim()
+      ? "(user skipped the question — proceed using your best judgement)"
+      : answer.trim();
+
     this.tracker.log({
       type: "ask_user",
       path: "interaction",
-      details: { toolName: "ask_user", command: question },
-      status: "pending",
+      details: { toolName: "ask_user", command: question, after: reply },
+      status: "executed",
     });
-    return `Queued question for user: ${question}`;
+    return reply;
   }
 
   async webSearch(query: string): Promise<string> {

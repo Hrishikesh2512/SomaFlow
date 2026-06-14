@@ -60,14 +60,34 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
 
     replace_in_file: tool({
       description:
-        "Stage a partial replacement in an existing file (pending approval). Target content must match exactly once.",
+        "Stage a single find/replace in an existing file (pending approval). Matching is exact first, then falls back to ignoring leading/trailing whitespace and re-indenting. By default the target must match one place; set replaceAll to change every occurrence. For several edits to one file, prefer edit_file.",
       inputSchema: z.object({
         path: z.string(),
-        targetContent: z.string().describe("Exact string to be replaced"),
+        targetContent: z.string().describe("String to be replaced"),
         replacementContent: z.string().describe("New content to replace with"),
+        replaceAll: z.boolean().optional().default(false).describe("Replace every occurrence instead of requiring a unique match"),
       }),
-      execute: async ({ path: p, targetContent, replacementContent }) =>
-        executor.replaceInFile(p, targetContent, replacementContent),
+      execute: async ({ path: p, targetContent, replacementContent, replaceAll }) =>
+        executor.replaceInFile(p, targetContent, replacementContent, replaceAll),
+    }),
+
+    edit_file: tool({
+      description:
+        "Stage multiple find/replace edits to a single file in one atomic operation (pending approval). Edits apply in order, each seeing the result of the previous. If any edit fails to match, the whole batch is rejected and nothing is staged. Matching is exact first, then whitespace/indentation-flexible. This is the preferred tool for changing existing files.",
+      inputSchema: z.object({
+        path: z.string().describe("Relative file path"),
+        edits: z
+          .array(
+            z.object({
+              oldText: z.string().describe("Text to find (must be non-empty and differ from newText)"),
+              newText: z.string().describe("Replacement text"),
+              replaceAll: z.boolean().optional().default(false).describe("Replace every occurrence of oldText"),
+            }),
+          )
+          .min(1)
+          .describe("Ordered list of edits to apply"),
+      }),
+      execute: async ({ path: p, edits }) => executor.editFile(p, edits),
     }),
 
     delete_file: tool({
@@ -159,7 +179,7 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
 
     ask_user: tool({
       description:
-        "Pause agent execution to ask the user a clarifying question. Useful when stuck or ambiguous.",
+        "Pause execution to ask the user a clarifying question and wait for their typed reply, which is returned to you. Use when the task is ambiguous or you need a decision before proceeding. Prefer asking over guessing on irreversible choices.",
       inputSchema: z.object({
         question: z.string().describe("The question to ask the user"),
       }),
@@ -324,11 +344,46 @@ export function createAgentTools(executor: ToolExecutor, memory: MemoryStore) {
     }),
 
     search_symbol: tool({
-      description: "Search the codebase for the definition of a specific symbol (class, function, variable, interface).",
+      description: "Find where a symbol (class, function, variable, interface, type) is declared across the workspace. Uses the TypeScript language service for accurate, semantic results (falls back to regex if needed).",
       inputSchema: z.object({
         symbolName: z.string(),
       }),
-      execute: async ({ symbolName }) => executor.searchSymbol(symbolName),
+      execute: async ({ symbolName }) => executor.searchSymbolSemantic(symbolName),
+    }),
+
+    find_definition: tool({
+      description: "Semantic go-to-definition: resolve a symbol by name to its true declaration location(s) using the TypeScript language service. More accurate than text search for understanding where something comes from.",
+      inputSchema: z.object({
+        symbol: z.string().describe("Symbol name to resolve"),
+        fromFile: z.string().optional().describe("Optional file to disambiguate which symbol you mean"),
+      }),
+      execute: async ({ symbol, fromFile }) => executor.findDefinition(symbol, fromFile),
+    }),
+
+    find_references: tool({
+      description: "Semantic find-all-references: list every place a symbol is used across the workspace (call sites, imports, the declaration). Use this before renaming or changing a function's signature to see the blast radius.",
+      inputSchema: z.object({
+        symbol: z.string().describe("Symbol name to find references for"),
+        fromFile: z.string().optional().describe("Optional file to disambiguate which symbol you mean"),
+      }),
+      execute: async ({ symbol, fromFile }) => executor.findReferences(symbol, fromFile),
+    }),
+
+    get_type: tool({
+      description: "Get the resolved type signature and documentation for a symbol (like hovering over it in an editor). Use to learn a function's real parameters/return type instead of guessing.",
+      inputSchema: z.object({
+        symbol: z.string().describe("Symbol name to inspect"),
+        fromFile: z.string().optional().describe("Optional file to disambiguate which symbol you mean"),
+      }),
+      execute: async ({ symbol, fromFile }) => executor.getTypeInfo(symbol, fromFile),
+    }),
+
+    get_diagnostics: tool({
+      description: "Get TypeScript type/syntax errors for a file (or the whole workspace) via the language service. This reflects your STAGED, un-applied edits, so use it to verify changes BEFORE asking for approval — faster and more precise than run_typecheck.",
+      inputSchema: z.object({
+        file: z.string().optional().describe("Optional relative file path; omit to check the whole workspace"),
+      }),
+      execute: async ({ file }) => executor.getDiagnostics(file),
     }),
 
     list_skills: tool({

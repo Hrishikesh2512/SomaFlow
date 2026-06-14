@@ -24,28 +24,41 @@ nothing touches your filesystem until you say so.
 
 ## what it actually does
 
-SomaFlow is a 4-agent pipeline that takes a task description and turns it into reviewed, linted, type-checked code: staged for your approval before anything is written to disk. Not a chatbot. Not autocomplete. An actual agent loop that knows when it's wrong and fixes itself.
+SomaFlow takes a task description and turns it into reviewed, linted, type-checked code: staged for your approval before anything is written to disk. Not a chatbot. Not autocomplete. A single adaptive agent loop that investigates the code, plans as it learns, edits, verifies, and fixes itself — streaming its reasoning and tool calls live.
 
 Runs as a Terminal UI locally or a Telegram bot remotely. Cold starts in under 100ms on Bun.
 
 <br/>
 
-## the pipeline
+## the loop
+
+One adaptive agent — it reads the code *before* it plans, revises the plan as it learns, and verifies its own work. Then it critiques its own diff and gets a chance to fix it before you ever see it.
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Planner   │────▶│   Executor   │────▶│   Reviewer   │────▶│  Auto-Fix   │
-│             │     │              │     │              │     │             │
-│ task.md     │     │ 25+ tools    │     │ reads diff   │     │ tsc + lint  │
-│ impl plan   │     │ fs/git/shell │     │ critiques it │     │ up to 2x    │
-└─────────────┘     └──────────────┘     └──────────────┘     └─────────────┘
-                                                                      │
-                                                              ┌───────▼───────┐
-                                                              │ approval UI   │
-                                                              │ git-style diff│
-                                                              │ you decide    │
-                                                              └───────────────┘
+                         ┌──────────────────────────────────┐
+                         │          ADAPTIVE AGENT          │
+   task ───────────────▶ │  investigate → plan → act →      │ ◀── re-plans as it learns
+                         │  verify (tsc / tests) → repeat   │
+                         │  25+ tools · fs/git/shell · web  │
+                         └────────────────┬─────────────────┘
+                                          │ staged diff
+                                 ┌────────▼─────────┐
+                                 │  self-review →   │  reads its own diff,
+                                 │  revise          │  critiques, fixes
+                                 └────────┬─────────┘
+                                          │
+                          ┌───────────────▼───────────────┐
+                          │ approval UI · git-style diff   │
+                          │ you decide → apply             │
+                          └───────────────┬───────────────┘
+                                          │ on apply
+                                 ┌────────▼─────────┐
+                                 │  auto-fix loop   │  eslint + tsc,
+                                 │  (up to 2x)      │  self-corrects
+                                 └──────────────────┘
 ```
+
+The whole run streams to your terminal as it happens — reasoning, the live plan checklist, and each tool call — instead of blocking until it's done. And it's a **continuing conversation**: history persists across turns, so you can give follow-ups, corrections, and new tasks with full context, hit **Ctrl-C** to interrupt mid-run and steer, or `/new` to start a fresh thread. Long sessions **auto-compact** — older turns are summarized to stay within the context window (or trigger it yourself with `/compact`).
 
 <br/>
 
@@ -61,11 +74,14 @@ Runs as a Terminal UI locally or a Telegram bot remotely. Cold starts in under 1
 
 | category | tools |
 |----------|-------|
-| filesystem | read, edit, replace, delete, create files & folders |
-| search & AST | ripgrep-style semantic search, regex symbol search, file listing |
+| MCP | connect external Model Context Protocol servers; their tools load in as `mcp__<server>__<tool>` |
+| delegation | spawn focused sub-agents (own clean context, shared workspace/staging) for isolated subtasks |
+| filesystem | read, atomic multi-edit (whitespace-tolerant find/replace), delete, create files & folders |
+| search & AST | ripgrep-style search, file listing, repo map |
+| code intelligence | TypeScript language-service go-to-definition, find-all-references, type/hover, workspace symbol search |
 | git & shell | read-only exec, queued mutating commands, background detached tasks |
 | context | AI file summarization, session memory compression |
-| verification | `bunx tsc --noEmit`, `eslint --fix`, `bun test` |
+| verification | language-service diagnostics (sees staged edits), `bunx tsc --noEmit`, `eslint --fix`, `bun test` |
 
 <br/>
 
@@ -116,6 +132,23 @@ bun run index.ts chat       # standard chat mode
 bun run index.ts telegram   # start telegram bot listener
 bun run index.ts --help     # all commands
 ```
+
+<br/>
+
+## connecting MCP servers
+
+Drop a `.somaflow/mcp.json` in your project (or `~/.somaflow/mcp.json`, or point `SOMAFLOW_MCP_CONFIG` at any file). Standard MCP format:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."] },
+    "github":     { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-github"], "env": { "GITHUB_TOKEN": "..." } }
+  }
+}
+```
+
+On launch, SomaFlow connects each server and exposes its tools to the agent as `mcp__<server>__<tool>`. No config = no MCP, zero overhead.
 
 <br/>
 

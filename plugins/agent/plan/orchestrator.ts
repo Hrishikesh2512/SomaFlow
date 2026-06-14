@@ -1,6 +1,6 @@
 import chalk from "chalk";
 import { confirm, isCancel, text } from "@clack/prompts";
-import { ToolLoopAgent, stepCountIs } from "ai";
+import { ToolLoopAgent } from "ai";
 import { getAgentModel } from "../../../src/ai/ai.config.ts";
 import { ActionTracker } from "../action-tracker.ts";
 import { ToolExecutor } from "../tool-executor.ts";
@@ -41,6 +41,7 @@ export async function runPlanMode(): Promise<void> {
     message: `Execute ${selected.length} step(s)`,
     initialValue: true,
   });
+  if (isCancel(proceed) || !proceed) return;
 
   const config = defaultAgentConfig();
   const tracker = new ActionTracker();

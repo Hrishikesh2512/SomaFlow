@@ -19,7 +19,18 @@ export default [
         __dirname: "readonly",
         fetch: "readonly",
         AbortSignal: "readonly",
-        setTimeout: "readonly"
+        AbortController: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        TextEncoder: "readonly",
+        TextDecoder: "readonly",
+        structuredClone: "readonly",
+        FormData: "readonly",
+        Blob: "readonly"
       }
     },
     plugins: {
